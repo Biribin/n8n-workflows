@@ -1,0 +1,146 @@
+{
+  "name": "🧪 Pilote — agent Brouillon de relance via CLI",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "80e7bcd7-abc7-413a-9935-d52442fa6ed6",
+      "name": "▶️ Lancer le pilote",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  entreprise: 'Groupe Aeroport Services',\n  poste: 'Alternant Automatisation et Data',\n  joursDepuisEnvoi: 12,\n  envoyeeLe: '2026-07-25',\n  urlOffre: 'https://exemple.fr/offres/4821',\n  candidateName: 'Lineo Biribin',\n  rang: 1,\n  relanceMax: 2,\n  consigneRetouche: ''\n} }];"
+      },
+      "id": "24a83594-c94c-4e4e-b50a-3a8d832122f1",
+      "name": "⚙️ Contexte de relance",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $input.first().json;\n\nconst consignes = [\n  \"Tu rediges une relance de candidature restee sans reponse. Tu ecris en francais, a la premiere personne, au nom du candidat.\",\n  \"\",\n  \"REGLES ABSOLUES\",\n  \"- INTERDIT : le tiret cadratin et le tiret demi-cadratin. Mets une virgule ou deux-points a la place.\",\n  \"- INTERDIT : le markdown (pas d'asterisques, pas de dieses, pas de crochets) et les balises HTML.\",\n  \"- N'invente AUCUNE anciennete et AUCUN chiffre. Le poste actuel du candidat a commence en mars 2026. Ne dis jamais deux ans, ni un an et demi, ni aucune duree absente du contexte fourni.\",\n  \"- N'invente ni entretien passe, ni echange telephonique, ni nom de recruteur, ni date precise que le contexte ne donne pas.\",\n  \"- Le corps fait 90 mots maximum, en trois paragraphes courts au plus.\",\n  \"- Ton courtois et direct, sans insistance et sans reproche : c'est une relance, pas une reclamation.\",\n  \"- Rappelle le poste et l'entreprise, situe la candidature dans le temps avec ce que donne le contexte, et redis en une phrase l'interet pour le poste.\",\n  \"- Termine par une formule de politesse simple suivie du SEUL nom du candidat. N'ajoute ni numero de telephone ni adresse de courriel : ils sont ajoutes automatiquement en pied de message.\",\n  \"- Si une consigne de retouche est fournie, elle passe avant tout le reste.\",\n  \"\",\n  \"L'objet fait 60 caracteres maximum et mentionne le poste. Ne le prefixe ni de Re: ni de Relance:.\",\n  \"Retourne uniquement les deux champs objet et corps.\"\n].join('\\n');\n\nconst duree = ctx.joursDepuisEnvoi != null ? ctx.joursDepuisEnvoi + ' jours' : 'duree inconnue';\nconst bloc = [\n  'RELANCE A REDIGER',\n  '- Entreprise : ' + ctx.entreprise,\n  '- Poste : ' + ctx.poste,\n  '- Candidature envoyee il y a : ' + duree,\n  '- Date de la candidature (peut etre vide) : ' + (ctx.envoyeeLe || 'inconnue'),\n  '- Offre : ' + (ctx.urlOffre || 'inconnue'),\n  '- Nom du candidat : ' + ctx.candidateName,\n  '- Numero de cette relance : ' + ctx.rang + ' sur ' + ctx.relanceMax + ' au maximum'\n].join('\\n');\n\nconst retouche = ctx.consigneRetouche ? '\\n- Consigne de retouche prioritaire : ' + ctx.consigneRetouche : '';\n\nconst format = [\n  '',\n  'Reponds UNIQUEMENT par un objet JSON valide, sans texte autour ni bloc de code, respectant exactement ce schema :',\n  '{\\\"objet\\\": \\\"chaine, 60 caracteres maximum\\\", \\\"corps\\\": \\\"chaine, 90 mots maximum\\\"}'\n].join('\\n');\n\nreturn [{ json: { prompt: consignes + '\\n\\n' + bloc + retouche + '\\n' + format, contexte: ctx } }];"
+      },
+      "id": "e946f9ce-059a-4684-ab13-5ac872b387eb",
+      "name": "🧩 Assembler le prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mod = require('child_process');\nconst entree = $input.first().json;\nconst prompt = String(entree.prompt || '');\nconst debut = Date.now();\n\nlet sortie = '';\nlet sortieErreur = null;\nlet erreur = null;\nlet codeSortie = 0;\n\ntry {\n  sortie = String(mod.execFileSync(\n    'claude-run',\n    ['-p', prompt, '--output-format', 'json', '--model', 'sonnet'],\n    { encoding: 'utf8', timeout: 270000, maxBuffer: 33554432, cwd: '/tmp' }\n  ));\n} catch (err) {\n  codeSortie = (err && typeof err.status === 'number') ? err.status : -1;\n  erreur = String((err && err.message) || err).slice(0, 400);\n  sortie = (err && err.stdout) ? String(err.stdout) : '';\n  sortieErreur = (err && err.stderr) ? String(err.stderr).slice(0, 2000) : null;\n}\n\nreturn [{ json: {\n  sortie: sortie,\n  sortieErreur: sortieErreur,\n  erreur: erreur,\n  codeSortie: codeSortie,\n  dureeAppelMs: Date.now() - debut,\n  contexte: entree.contexte\n} }];"
+      },
+      "id": "21998988-157e-4f41-aa88-cbcb2aa2b12e",
+      "name": "🤖 Claude Code (CLI)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const brut = $input.first().json;\nconst sortie = String(brut.sortie || '').trim();\n\nif (!sortie) {\n  return [{ json: { ok: false, etape: 'appel', codeSortie: brut.codeSortie, erreur: brut.erreur, sortieErreur: brut.sortieErreur, dureeAppelMs: brut.dureeAppelMs, contexte: brut.contexte } }];\n}\n\nlet enveloppe;\ntry {\n  enveloppe = JSON.parse(sortie);\n} catch (e) {\n  return [{ json: { ok: false, etape: 'enveloppe', erreur: String(e), sortie: sortie.slice(0, 3000), contexte: brut.contexte } }];\n}\n\nif (enveloppe.is_error || brut.codeSortie !== 0) {\n  return [{ json: { ok: false, etape: 'claude', codeSortie: brut.codeSortie, erreur: String(enveloppe.result || enveloppe.subtype || brut.erreur || 'erreur inconnue').slice(0, 2000), contexte: brut.contexte } }];\n}\n\nconst texte = typeof enveloppe.result === 'string' ? enveloppe.result : sortie;\nconst fence = String.fromCharCode(96, 96, 96);\nlet nettoye = texte.trim();\nwhile (nettoye.indexOf(fence) === 0) {\n  nettoye = nettoye.slice(fence.length).replace(/^json/i, '').trim();\n}\nconst finFence = nettoye.lastIndexOf(fence);\nif (finFence > 0) nettoye = nettoye.slice(0, finFence).trim();\n\nconst d = nettoye.indexOf('{');\nconst f = nettoye.lastIndexOf('}');\nlet charge = null;\nlet erreurJson = null;\nif (d >= 0 && f > d) {\n  try { charge = JSON.parse(nettoye.slice(d, f + 1)); }\n  catch (e) { erreurJson = String(e); }\n} else {\n  erreurJson = 'aucun objet JSON trouve dans la reponse';\n}\n\nreturn [{ json: {\n  ok: charge !== null,\n  etape: charge !== null ? 'ok' : 'json',\n  erreur: erreurJson,\n  reponse: charge,\n  texteBrut: texte,\n  contexte: brut.contexte,\n  dureeAppelMs: brut.dureeAppelMs,\n  coutUsd: enveloppe.total_cost_usd === undefined ? null : enveloppe.total_cost_usd,\n  cacheEcrit: (enveloppe.usage && enveloppe.usage.cache_creation_input_tokens) || 0,\n  cacheLu: (enveloppe.usage && enveloppe.usage.cache_read_input_tokens) || 0\n} }];"
+      },
+      "id": "30b2856e-fc0b-45b4-9abb-046777a890cf",
+      "name": "🧩 Parser la réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\n\nif (!r.ok || !r.reponse) {\n  return [{ json: { verdict: 'ECHEC', etape: r.etape, erreur: r.erreur, dureeAppelMs: r.dureeAppelMs } }];\n}\n\nconst ctx = r.contexte || {};\nconst objet = String(r.reponse.objet || '');\nconst corps = String(r.reponse.corps || '');\nconst cadratin = String.fromCharCode(8212);\nconst demiCadratin = String.fromCharCode(8211);\n\nfunction aplatir(s) {\n  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n}\nconst corpsPlat = aplatir(corps);\n\nconst mots = corps.trim() ? corps.trim().split(/\\s+/).length : 0;\n\nconst blocs = corps.split(/\\n\\s*\\n/).map(function (p) { return p.trim(); }).filter(Boolean);\nconst dernier = blocs.length ? blocs[blocs.length - 1] : '';\nconst signaturePresente = /^(cordialement|bien cordialement|respectueusement|sincerement|salutations)/i.test(aplatir(dernier));\nconst paragraphes = signaturePresente ? blocs.length - 1 : blocs.length;\n\nconst violations = [];\nfunction verifier(condition, libelle) { if (!condition) violations.push(libelle); }\n\nverifier(objet.length > 0 && objet.length <= 60, 'objet hors limite (' + objet.length + ' caracteres, max 60)');\nverifier(!/^\\s*(re\\s*:|relance\\s*:)/i.test(objet), 'objet prefixe par Re: ou Relance:');\nverifier(mots > 0 && mots <= 90, 'corps hors limite (' + mots + ' mots, max 90)');\nverifier(paragraphes <= 3, 'corps en ' + paragraphes + ' paragraphes hors signature (max 3)');\nverifier(signaturePresente, 'formule de politesse finale absente');\nverifier(corps.indexOf(cadratin) === -1 && objet.indexOf(cadratin) === -1, 'tiret cadratin present');\nverifier(corps.indexOf(demiCadratin) === -1 && objet.indexOf(demiCadratin) === -1, 'tiret demi-cadratin present');\nverifier(!/[*#\\[\\]]/.test(corps), 'markdown present dans le corps');\nverifier(!/<[a-z][^>]*>/i.test(corps), 'balise HTML presente dans le corps');\nverifier(corpsPlat.indexOf(aplatir(ctx.entreprise)) !== -1, 'entreprise non mentionnee dans le corps');\nverifier(corpsPlat.indexOf(aplatir(ctx.poste)) !== -1, 'poste non mentionne dans le corps');\nverifier(aplatir(corps.trim().slice(-60)).indexOf(aplatir(ctx.candidateName)) !== -1, 'ne se termine pas par le nom du candidat');\nverifier(!/(@|\\+33|0[1-9](\\s?\\d{2}){4})/.test(corps), 'courriel ou telephone ajoute dans le corps');\nverifier(!/(deux ans|un an|an et demi|ans d'experience|annees d'experience)/i.test(corpsPlat), 'anciennete inventee');\nverifier(!/(entretien|appel telephonique|notre echange)/i.test(corpsPlat), 'echange passe invente');\n\nreturn [{ json: {\n  verdict: violations.length === 0 ? 'CONFORME' : 'NON CONFORME',\n  controles: 15,\n  violations: violations,\n  accentue: corps !== corpsPlat.normalize('NFC') && /[à-ÿ]/.test(corps),\n  objet: objet,\n  objetCaracteres: objet.length,\n  corps: corps,\n  corpsMots: mots,\n  corpsParagraphes: paragraphes,\n  dureeAppelMs: r.dureeAppelMs,\n  coutUsd: r.coutUsd,\n  cacheEcrit: r.cacheEcrit,\n  cacheLu: r.cacheLu\n} }];"
+      },
+      "id": "d6d0b583-c2e8-4df6-b5db-988d526a56a4",
+      "name": "✅ Contrôles qualité",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "▶️ Lancer le pilote": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Contexte de relance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Contexte de relance": {
+      "main": [
+        [
+          {
+            "node": "🧩 Assembler le prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Assembler le prompt": {
+      "main": [
+        [
+          {
+            "node": "🤖 Claude Code (CLI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Claude Code (CLI)": {
+      "main": [
+        [
+          {
+            "node": "🧩 Parser la réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Parser la réponse": {
+      "main": [
+        [
+          {
+            "node": "✅ Contrôles qualité",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

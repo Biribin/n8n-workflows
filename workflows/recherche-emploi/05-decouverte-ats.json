@@ -1,0 +1,254 @@
+{
+  "name": "5. Decouverte ATS (68 connecteurs)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "b8690396-e686-40f0-ae4b-4de1a5fd8666",
+      "name": "🕘 Cron découverte ATS",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "notes": "8 h en semaine, avant la tournee de relances de 10 h (WF3) pour ne pas empiler deux longues executions."
+    },
+    {
+      "id": "50df491d-3553-4b3e-a801-c727713667cc",
+      "name": "⚙️ Config découverte",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1",
+              "name": "careerOpsBase",
+              "value": "http://service.interne:3000",
+              "type": "string"
+            },
+            {
+              "id": "d2",
+              "name": "candidateEmail",
+              "value": "prenom.nom@exemple.fr",
+              "type": "string"
+            },
+            {
+              "id": "d3",
+              "name": "sinceJours",
+              "value": 7,
+              "type": "number"
+            },
+            {
+              "id": "d4",
+              "name": "limiteEntreprises",
+              "value": 150,
+              "type": "number"
+            },
+            {
+              "id": "d5",
+              "name": "topOffres",
+              "value": 15,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "limiteEntreprises n'est pas cosmetique : sans plafond le scanner balaie TOUS les annuaires (des heures). 150 est le defaut de l'Explorer, repris tel quel pour que les deux surfaces ne divergent pas."
+    },
+    {
+      "id": "02dcaa1f-fd1c-4744-b69a-25cbb1238e46",
+      "name": "🌐 career-ops: scanner les annuaires",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $json.careerOpsBase }}/api/scan?since={{ $json.sinceJours }}&limit={{ $json.limiteEntreprises }}&top={{ $json.topOffres }}",
+        "options": {
+          "timeout": 290000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-5-decouverte"
+            }
+          ]
+        }
+      },
+      "notes": "GET qui ECRIT : la forme qu'un cron sait appeler sans corps. Ajoute les nouvelles offres a data/pipeline.md via scan-ats-full.mjs sous pipeline-lock.mjs. Ne touche NI le tracker NI portals.yml. neverError : un annuaire injoignable ne doit pas teindre l'execution en rouge, on le lit et on le rapporte.",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "40d0f429-04e5-4e1c-8571-cb1df1978f0b",
+      "name": "🧩 Bilan de la tournée",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// La reponse utile est dans .body (fullResponse). Un echec arrive ici sous\n// forme d'item sans body plutot qu'en exception (neverError).\nconst rep = ($json && typeof $json === 'object' && $json.body) ? $json.body : {};\nconst scan = rep.scan ?? {};\nconst pipeline = rep.pipeline ?? {};\nconst offres = Array.isArray(rep.offres) ? rep.offres.slice(0, 15) : [];\n\n// Une panne du scanner doit se distinguer d'une tournee qui n'a rien trouve :\n// les deux rendent zero offre, mais l'une est un incident et l'autre un lundi calme.\nconst enPanne = Boolean(rep.error) || Number($json.statusCode) >= 400;\nconst motif = String(rep.error || (Number($json.statusCode) >= 400 ? 'HTTP ' + $json.statusCode : ''));\nconst gardees = Number(scan.offres_gardees ?? 0);\nconst enAttente = Number(pipeline.en_attente ?? 0);\n\n// Les intitules viennent d'annuaires publics : ils sont echappes avant d'entrer\n// dans le HTML du courriel.\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nlet liste = '';\nfor (const o of offres) {\n  liste += '<li><strong>' + esc(o.pertinence ?? '?') + '/100</strong> - ' + esc(o.entreprise || '?')\n    + ' - <a href=\"' + esc(o.url) + '\">' + esc(o.poste || '?') + '</a><br><small>'\n    + esc(Array.isArray(o.raisons) ? o.raisons.join(' · ') : '') + '</small></li>';\n}\n\nconst corpsHtml = enPanne\n  ? '<h2>La tournee de decouverte a echoue</h2><p>' + esc(motif || 'raison inconnue')\n    + '</p><p>Rien n a ete ajoute au pipeline.</p>'\n  : '<h2>Decouverte ATS</h2><p><strong>' + gardees + '</strong> nouvelle(s) offre(s) ajoutee(s) au pipeline. '\n    + '<strong>' + enAttente + '</strong> en attente de decision.</p>'\n    + '<p><a href=\"n8n.exemple.internal/pipeline\">Ouvrir le pipeline</a></p>'\n    + (liste ? '<hr><h3>Les mieux classees</h3><ul>' + liste + '</ul>' : '')\n    + '<hr><p><small>' + Number(scan.entreprises_scannees ?? 0) + ' entreprises balayees sur '\n    + Number(scan.entreprises_disponibles ?? 0) + ' disponibles'\n    + (scan.plafond_atteint === true ? ' (plafond atteint : remonter limiteEntreprises pour aller plus loin)' : '')\n    + '. ' + Number(scan.annuaires_injoignables ?? 0) + ' annuaire(s) injoignable(s).</small></p>';\n\nreturn [{\n  json: {\n    enPanne,\n    motif,\n    offresGardees: gardees,\n    enAttente,\n    entreprisesScannees: Number(scan.entreprises_scannees ?? 0),\n    annuairesInjoignables: Number(scan.annuaires_injoignables ?? 0),\n    sujet: enPanne\n      ? '[ALERTE] Decouverte ATS en echec'\n      : 'Decouverte ATS : ' + gardees + ' nouvelle(s), ' + enAttente + ' en attente',\n    corpsHtml,\n    // Rien a annoncer quand la tournee n'a rien ramene ET que rien n'attend :\n    // un courriel quotidien qui dit zero finit par ne plus etre lu.\n    aAnnoncer: enPanne || gardees > 0 || enAttente > 0,\n  },\n}];"
+      },
+      "notes": "Distingue une panne d'une tournee vide, et construit le courriel ici plutot que dans une expression Gmail : le HTML se relit, et les intitules venus d'annuaires publics sont echappes."
+    },
+    {
+      "id": "00a68399-0527-4b9d-952e-9eec7c83ae58",
+      "name": "🔀 Quelque chose à annoncer ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.aAnnoncer }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": true
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "69a84fab-add3-49f7-8968-9718973d639a",
+      "name": "📧 Découverte: bilan",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config découverte').first().json.candidateEmail }}",
+        "subject": "={{ $json.sujet }}",
+        "message": "={{ $json.corpsHtml }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "notes": "Toujours a Lineo, jamais a un tiers. Ce workflow LIT des annuaires publics et ECRIT dans le pipeline : il n'envoie rien a personne d'autre.",
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "🕘 Cron découverte ATS": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config découverte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config découverte": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: scanner les annuaires",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: scanner les annuaires": {
+      "main": [
+        [
+          {
+            "node": "🧩 Bilan de la tournée",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Bilan de la tournée": {
+      "main": [
+        [
+          {
+            "node": "🔀 Quelque chose à annoncer ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Quelque chose à annoncer ?": {
+      "main": [
+        [
+          {
+            "node": "📧 Découverte: bilan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "tags": []
+}

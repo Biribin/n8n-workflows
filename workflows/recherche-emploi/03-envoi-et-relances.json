@@ -1,0 +1,2068 @@
+{
+  "name": "3. Envoi et relances",
+  "active": false,
+  "nodes": [
+    {
+      "id": "388130f4-c6a2-4ea7-b455-a735b63624a0",
+      "name": "🔔 Webhook: decision de Lineo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "candidature-decision",
+        "options": {}
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "bfb303c8-df99-441a-a51c-e8a571b2a6c9",
+      "name": "⚙️ Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2176,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "careerOpsBase",
+              "value": "http://service.interne:3000",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "candidateName",
+              "value": "Linéo Biribin",
+              "type": "string"
+            },
+            {
+              "id": "e3",
+              "name": "candidateEmail",
+              "value": "prenom.nom@exemple.fr",
+              "type": "string"
+            },
+            {
+              "id": "e4",
+              "name": "candidatePhone",
+              "value": "06 00 00 00 00",
+              "type": "string"
+            },
+            {
+              "id": "e5",
+              "name": "githubOwner",
+              "value": "Biribin",
+              "type": "string"
+            },
+            {
+              "id": "e6",
+              "name": "githubRepo",
+              "value": "cv",
+              "type": "string"
+            },
+            {
+              "id": "e7",
+              "name": "githubBaseBranch",
+              "value": "main",
+              "type": "string"
+            },
+            {
+              "id": "e8",
+              "name": "githubPdfPath",
+              "value": "dist/pdf/cv-fr-ats.pdf",
+              "type": "string"
+            },
+            {
+              "id": "e9",
+              "name": "githubLetterDocxPath",
+              "value": "dist/docx/lettre-fr.docx",
+              "type": "string"
+            },
+            {
+              "id": "e10",
+              "name": "githubToken",
+              "value": "github_pat_REMPLACER",
+              "type": "string"
+            },
+            {
+              "id": "e11",
+              "name": "wf2Webhook",
+              "value": "n8n.exemple.internal/webhook/candidature-generer",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6b16be10-c0da-4fee-8e8e-d9e72dfbff91",
+      "name": "🕘 Cron relances",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2400,
+        1200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1-5"
+            }
+          ]
+        }
+      },
+      "notes": "Tournee de relances en semaine. La cadence (delai, nombre maxi) n est PAS ici : elle vient de career-ops, /api/followups?full=1."
+    },
+    {
+      "id": "cffcb4ae-9c14-4569-aa46-7234588136dd",
+      "name": "⚙️ Config relances",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2176,
+        1200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "careerOpsBase",
+              "value": "http://service.interne:3000",
+              "type": "string"
+            },
+            {
+              "id": "r2",
+              "name": "candidateName",
+              "value": "Linéo Biribin",
+              "type": "string"
+            },
+            {
+              "id": "r3",
+              "name": "candidateEmail",
+              "value": "prenom.nom@exemple.fr",
+              "type": "string"
+            },
+            {
+              "id": "r4",
+              "name": "candidatePhone",
+              "value": "06 00 00 00 00",
+              "type": "string"
+            },
+            {
+              "id": "r5",
+              "name": "githubOwner",
+              "value": "Biribin",
+              "type": "string"
+            },
+            {
+              "id": "r6",
+              "name": "githubRepo",
+              "value": "cv",
+              "type": "string"
+            },
+            {
+              "id": "r7",
+              "name": "githubBaseBranch",
+              "value": "main",
+              "type": "string"
+            },
+            {
+              "id": "r8",
+              "name": "githubToken",
+              "value": "github_pat_REMPLACER",
+              "type": "string"
+            },
+            {
+              "id": "r9",
+              "name": "relanceSeuilJours",
+              "value": 7,
+              "type": "number"
+            },
+            {
+              "id": "r10",
+              "name": "relanceMax",
+              "value": 2,
+              "type": "number"
+            },
+            {
+              "id": "r11",
+              "name": "maxRelancesParExecution",
+              "value": 3,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "Valeurs de REPLI uniquement. Si /api/followups?full=1 rend un cadenceConfig, c est lui qui fait loi."
+    },
+    {
+      "id": "7a922032-1ec4-4d74-b7ef-19946ed562ba",
+      "name": "🧩 Decision recue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1952,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Le declencheur est lu par son NOM : le predecesseur immediat est Config.\nconst recu = $('🔔 Webhook: decision de Lineo').first().json ?? {};\nconst body = recu.body ?? {};\nconst query = recu.query ?? {};\n\nconst id = String(query.id ?? body.id ?? '').trim();\nif (!id) {\n  throw new Error(\"decision sans id : impossible de savoir quelle candidature envoyer. URL attendue : .../webhook/candidature-decision?id=<id de la fiche>\");\n}\n\nconst DECISIONS = ['valider', 'retoucher_lettre', 'retoucher_cv', 'refuser'];\nconst decision = String(body.decision ?? '').trim().toLowerCase();\n\nreturn [{\n  json: {\n    inboxId: id,\n    inboxPath: 'data-inbox/' + id + '.json',\n    // Une decision inconnue n'est PAS traduite en refus ni en validation : elle\n    // part en alerte. Deviner ici, c'est envoyer un courriel que personne n'a\n    // demande, ou en jeter un que Lineo attendait.\n    decision: DECISIONS.includes(decision) ? decision : '',\n    decisionBrute: decision,\n    consigne: String(body.consigne ?? '').trim().slice(0, 600),\n    raison: String(body.raison ?? '').trim().slice(0, 600),\n    decidePar: String(body.decide_par ?? '').trim(),\n    decideLe: new Date().toISOString(),\n  },\n}];"
+      },
+      "notes": "career-ops POSTe { decision, consigne, raison, decide_par } sur decision_url. L'identifiant de la candidature voyage dans l'URL (?id=), pose par le workflow 2 : le corps ne le porte pas."
+    },
+    {
+      "id": "2b5da2c3-b272-42d0-8376-c282dd12a711",
+      "name": "🐙 GitHub: Lire la fiche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1728,
+        0
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $json.inboxPath }}?ref={{ $('⚙️ Config').first().json.githubBaseBranch }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "0ade08f4-b964-4cbb-80e8-d4b5be438f3d",
+      "name": "🧩 Decision: contexte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const dec = $('🧩 Decision recue').first().json;\nconst file = $json ?? {};\n\nlet fiche;\ntry {\n  fiche = JSON.parse(Buffer.from(String(file.content || '').replace(/\\n/g, ''), 'base64').toString('utf8'));\n} catch (e) {\n  throw new Error('fiche ' + dec.inboxPath + ' illisible : ' + e.message);\n}\nif (!fiche || !String(fiche.schema || '').startsWith('career-ops-inbox/')) {\n  throw new Error(dec.inboxPath + \" n'est pas une fiche career-ops : rien ne sera envoye\");\n}\nif (!fiche.branche_github) {\n  throw new Error('fiche sans branche_github : le CV et la lettre sont introuvables');\n}\n\nreturn [{\n  json: {\n    ...dec,\n    fiche,\n    ficheSha: file.sha || '',\n    ficheRevision: Number(fiche.revision || 0),\n    branchName: String(fiche.branche_github),\n    courrielContact: String(fiche.courriel_contact || '').trim(),\n  },\n}];"
+      },
+      "notes": "La fiche est la SOURCE DE VERITE de ce qui sera envoye : elle porte le texte exact que Lineo a relu avant de trancher. Rien n'est reredige ici."
+    },
+    {
+      "id": "b4dcf89a-4a52-46e4-b13d-beb450f2b0bf",
+      "name": "🐘 Postgres: decision",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1280,
+        192
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH e AS (SELECT $1::jsonb AS d),\ncible AS (\n  SELECT cand.id\n  FROM career_ops.candidature cand, e\n  WHERE cand.branche_github = e.d->>'branche_github'\n),\nmaj AS (\n  UPDATE career_ops.candidature cand\n     SET statut = CASE (SELECT d->>'decision' FROM e)\n                    WHEN 'valider'          THEN 'VALIDEE'\n                    WHEN 'refuser'          THEN 'REFUSEE'\n                    WHEN 'retoucher_lettre' THEN 'RETOUCHE'\n                    WHEN 'retoucher_cv'     THEN 'RETOUCHE'\n                    ELSE 'ERREUR'\n                  END,\n         projete_le = now()\n   WHERE cand.id = (SELECT id FROM cible)\n     AND cand.statut NOT IN ('ENVOYEE', 'REFUSEE')\n  RETURNING cand.id\n),\ndec AS (\n  INSERT INTO career_ops.decision AS d2 (\n    candidature_id, type, consigne, raison, decidee_le, revision)\n  SELECT\n    (SELECT id FROM cible),\n    CASE WHEN d->>'decision' IN ('valider', 'retoucher_lettre', 'retoucher_cv', 'refuser')\n         THEN d->>'decision' ELSE 'decision_invalide' END,\n    NULLIF(btrim(COALESCE(d->>'consigne', '')), ''),\n    NULLIF(btrim(COALESCE(d->>'raison', '')), ''),\n    COALESCE(NULLIF(d->>'decide_le', '')::timestamptz, now()),\n    COALESCE(NULLIF(d->>'revision', '')::int, 0)\n  FROM e\n  WHERE EXISTS (SELECT 1 FROM cible)\n  ON CONFLICT (candidature_id, revision) DO UPDATE SET\n    type       = EXCLUDED.type,\n    consigne   = EXCLUDED.consigne,\n    raison     = EXCLUDED.raison,\n    decidee_le = EXCLUDED.decidee_le,\n    projete_le = now()\n  RETURNING d2.id, d2.type, d2.revision\n)\nSELECT (SELECT id FROM cible)     AS candidature_id,\n       (SELECT id FROM dec)       AS decision_id,\n       (SELECT type FROM dec)     AS decision_type,\n       (SELECT revision FROM dec) AS revision,\n       (SELECT count(*) FROM maj) AS statut_maj",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [JSON.stringify({ branche_github: $json.branchName, decision: $json.decision, consigne: $json.consigne, raison: $json.raison, decide_le: $json.decideLe, revision: $json.ficheRevision })] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "A_RECONNECTER",
+          "name": "postgres (a reconnecter)"
+        }
+      },
+      "notes": "La table decision est celle qui capture POURQUOI Lineo refuse : c'est la source que analyze-patterns.mjs agrege. Non bloquante pour l'envoi.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "9c3c2ae8-fc86-41c7-9fbb-1c69abdc87fa",
+      "name": "🔀 Aiguillage: decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1280,
+        -192
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "valider",
+              "renameOutput": true,
+              "conditions": {
+                "options": {
+                  "version": 3,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "d-val",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "valider"
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "retoucher_lettre",
+              "renameOutput": true,
+              "conditions": {
+                "options": {
+                  "version": 3,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "d-rl",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "retoucher_lettre"
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "retoucher_cv",
+              "renameOutput": true,
+              "conditions": {
+                "options": {
+                  "version": 3,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "d-rc",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "retoucher_cv"
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "refuser",
+              "renameOutput": true,
+              "conditions": {
+                "options": {
+                  "version": 3,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "d-ref",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "refuser"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "decision_invalide"
+        }
+      }
+    },
+    {
+      "id": "74b592ad-e99a-4429-a848-a1344b076db7",
+      "name": "📥 CV PDF de la branche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1056,
+        -384
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubPdfPath }}?ref={{ encodeURIComponent($json.branchName) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.raw"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "895cd801-d0a0-43b9-8890-919f5225789f",
+      "name": "📥 Lettre DOCX de la branche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -832,
+        -384
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubLetterDocxPath }}?ref={{ encodeURIComponent($('🧩 Decision: contexte').first().json.branchName) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.raw"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "docx"
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f1238d32-4426-4ce8-872f-f5ec6b531cba",
+      "name": "🧩 Joindre CV + lettre",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        -384
+      ],
+      "parameters": {
+        "jsCode": "// Le CV et la lettre sont relus depuis la BRANCHE, pas depuis une memoire du\n// workflow 2 : entre la generation et la decision, il peut s'etre ecoule des\n// jours et un round de retouche. Ce qui part est ce qui est sur la branche.\nconst ctx = $('🧩 Decision: contexte').first().json;\n\nconst bin = {};\ntry {\n  const b = $('📥 CV PDF de la branche').first().binary || {};\n  if (b.data) bin.data = { ...b.data, fileName: 'cv-BIRIBIN-LINEO.pdf', fileExtension: 'pdf' };\n} catch (e) { /* absent */ }\ntry {\n  const b = $('📥 Lettre DOCX de la branche').first().binary || {};\n  if (b.docx) bin.docx = { ...b.docx, fileName: 'lettre-BIRIBIN-LINEO.docx', fileExtension: 'docx' };\n} catch (e) { /* absent */ }\n\n// Aucun CV = on n'envoie rien. Une candidature sans piece jointe chez un\n// recruteur est pire qu'une candidature en retard.\nif (!bin.data) {\n  throw new Error('aucun CV PDF sur la branche ' + ctx.branchName + \" : rien n'a ete envoye\");\n}\n\nconst pieces = ['CV PDF adapte au poste'];\nif (bin.docx) pieces.push('lettre de motivation Word (1 page)');\n\nreturn [{\n  json: {\n    ...ctx,\n    attachmentNames: pieces.join(' + '),\n    attachmentProps: [bin.data ? 'data' : null, bin.docx ? 'docx' : null].filter(Boolean).join(','),\n  },\n  binary: bin,\n}];"
+      }
+    },
+    {
+      "id": "2c7f56a2-2322-4611-89a1-afe12f671ab2",
+      "name": "🔀 Courriel recruteur connu ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        -384
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "mail-connu",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.courrielContact }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "7cccea4f-a429-4c35-be6b-2f2e939482ad",
+      "name": "📧 Send: Application Output",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        -480
+      ],
+      "parameters": {
+        "sendTo": "={{ $json.courrielContact }}",
+        "subject": "={{ $json.fiche.objet_mail }}",
+        "message": "=<p>{{ $json.fiche.salutation }}</p>\n\n<p>{{ String($json.fiche.apercu_lettre || '').replace(/\\n\\n/g, '</p><p>').replace(/\\n/g, '<br>') }}</p>\n\n{{ (Array.isArray($json.fiche.arguments_cles) && $json.fiche.arguments_cles.length) ? '<ul><li>' + $json.fiche.arguments_cles.join('</li><li>') + '</li></ul>' : '' }}\n\n<hr>\n\n<strong>{{ $json.fiche.poste }}</strong><br>\n{{ $json.fiche.url_offre }}\n\n{{ $json.attachmentNames ? '<hr>Vous trouverez ci-joint : ' + $json.attachmentNames + '.' : '' }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "={{ $json.attachmentProps || 'data' }}"
+              }
+            ]
+          },
+          "appendAttribution": false
+        },
+        "resource": "message",
+        "operation": "send"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Le SEUL envoi vers un recruteur. Le texte vient de la FICHE, pas d'une nouvelle redaction : c'est exactement ce que Lineo a relu avant de valider.",
+      "webhookId": "A_REGENERER",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "4c897dfa-efd1-4f03-8300-eba7ddcaf211",
+      "name": "🧩 Preparer le tag archive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        -480
+      ],
+      "parameters": {
+        "jsCode": "// Archive avant suppression : la branche cv/<entreprise>-<poste>-<id> porte le CV\n// et la lettre exacts recus par le recruteur. Un tag annote sent/<entreprise>-<date>\n// est pose sur son dernier commit pour que l'arbre survive a la suppression.\n//\n// Le contexte est lu dans « Contact retenu », PAS dans « Joindre CV + lettre » :\n// c'est le premier des deux qui porte l'adresse retenue quand elle vient de\n// l'enrichissement. Lire l'autre archivait un destinataire vide.\nconst cfg = $('⚙️ Config').first().json;\nconst ctx = $('🧩 Contact retenu').first().json;\nconst fiche = ctx.fiche ?? {};\n\n// Meme convention de slug que career-ops/application-artifacts.mjs et que la\n// branche cv/<slug>-<poste>-<id> : le <slug> de sent/<slug> reprend le sien.\nconst slugify = (value) => String(value || 'unknown')\n  .normalize('NFD')\n  .replace(/\\p{Diacritic}/gu, '')\n  .toLowerCase()\n  .replace(/[^a-z0-9]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .slice(0, 40) || 'unknown';\n\nconst sentDate = $now.setZone('Europe/Paris').toFormat('yyyy-MM-dd');\n\nreturn [{\n  json: {\n    githubOwner: cfg.githubOwner,\n    githubRepo: cfg.githubRepo,\n    token: cfg.githubToken,\n    branchName: ctx.branchName,\n    inboxId: ctx.inboxId,\n    company: String(fiche.entreprise || ''),\n    tagBase: 'sent/' + slugify(fiche.entreprise || 'entreprise') + '-' + sentDate,\n    sentDate,\n    recipient: String(ctx.courrielContact || cfg.candidateEmail || ''),\n    contactSource: String(ctx.contactSource || ''),\n    contactConfiance: String(ctx.contactConfiance || ''),\n    // Sortie du noeud Gmail qui precede : le seul lien fiable message <-> candidature.\n    // threadId part aussi en base (career_ops.candidature.fil_gmail), ce qui permet\n    // au workflow 4 d'apparier une reponse de recruteur par fil.\n    gmailMessageId: String($json.id || ''),\n    gmailThreadId: String($json.threadId || ''),\n    jobTitle: String(fiche.poste || ''),\n    jobUrl: String(fiche.url_offre || ''),\n    pdfPath: cfg.githubPdfPath,\n    docxPath: cfg.githubLetterDocxPath,\n  },\n}];"
+      },
+      "notes": "Calcule sent/<entreprise>-<AAAA-MM-JJ>. Ne jamais rebrancher la suppression de branche en amont de cette chaine."
+    },
+    {
+      "id": "85dbbf9d-6640-4337-a304-c3886c77134c",
+      "name": "🐙 GitHub: Tags archive existants",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        -480
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.githubOwner }}/{{ $json.githubRepo }}/git/matching-refs/tags/{{ $json.tagBase }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "GET git/matching-refs : renvoie 200 [] quand rien ne correspond. fullResponse evite que le tableau vide ne coupe la chaine.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "70246c6a-a933-4aaa-90d5-8c672efafa35",
+      "name": "🐙 GitHub: Lire le HEAD de branche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        512,
+        -480
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('🧩 Preparer le tag archive').first().json.githubOwner }}/{{ $('🧩 Preparer le tag archive').first().json.githubRepo }}/git/ref/heads/{{ $('🧩 Preparer le tag archive').first().json.branchName }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "L'Action committe les PDF sur la branche : son HEAD n'est pas le commit suivi par le polling du workflow 2. Il faut le relire ici, sinon le tag archiverait un arbre sans dist/.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "583c556c-26b6-4aae-ad7f-70891443ccf9",
+      "name": "🧩 Construire le tag annote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -480
+      ],
+      "parameters": {
+        "jsCode": "// Corps du tag annote. Son message est ce que Lineo relira dans 3 mois :\n//   git show <tag>                        -> metadonnees de la candidature\n//   git show <tag>:dist/pdf/cv-fr-ats.pdf -> le CV exact envoye\nconst prep = $('🧩 Preparer le tag archive').first().json;\nconst cfg = $('⚙️ Config').first().json;\nconst existing = $('🐙 GitHub: Tags archive existants').first().json.body;\nconst headSha = $json.object && $json.object.sha ? String($json.object.sha) : '';\n\n// Garde-fou : pas de SHA archivable => on jette. La suppression de branche etant\n// en aval, elle n'est jamais atteinte et la branche survit pour inspection.\nif (!headSha) {\n  throw new Error('HEAD de la branche ' + prep.branchName + ' introuvable : archivage impossible, la branche est conservee');\n}\n\n// Deux candidatures chez la meme entreprise le meme jour : POST /git/refs renvoie\n// 422 « Reference already exists ». On suffixe -2, -3... d'apres les tags poses.\nconst taken = Array.isArray(existing) ? existing.length : 0;\nconst archiveTag = taken === 0 ? prep.tagBase : prep.tagBase + '-' + (taken + 1);\n\nconst message = [\n  'Candidature envoyee - ' + (prep.company || 'entreprise inconnue'),\n  '',\n  'Poste        : ' + (prep.jobTitle || ''),\n  'Entreprise   : ' + (prep.company || ''),\n  'Offre        : ' + (prep.jobUrl || ''),\n  'Destinataire : ' + (prep.recipient || '')\n    + (prep.contactSource ? ' (source : ' + prep.contactSource\n        + (prep.contactConfiance ? ', confiance ' + prep.contactConfiance : '') + ')' : ''),\n  'Envoye le    : ' + prep.sentDate,\n  '',\n  'Branche d origine : ' + prep.branchName,\n  'Fiche inbox       : ' + (prep.inboxId || ''),\n  'CV joint          : ' + (prep.pdfPath || ''),\n  'Lettre jointe     : ' + (prep.docxPath || ''),\n  'Message Gmail     : ' + (prep.gmailMessageId || ''),\n  'Fil Gmail         : ' + (prep.gmailThreadId || ''),\n  '',\n  'Tag pose par le workflow n8n 3 (Envoi et relances) avant suppression de la branche.',\n  'Recuperer : git fetch origin --tags puis git show ' + archiveTag + ':' + (prep.pdfPath || ''),\n].join('\\n');\n\nconst tagBody = {\n  tag: archiveTag,\n  message,\n  object: headSha,\n  type: 'commit',\n  tagger: {\n    name: cfg.candidateName || 'career-ops',\n    email: cfg.candidateEmail || '',\n    date: new Date().toISOString(),\n  },\n};\n\nreturn [{ json: { ...prep, archiveTag, archiveCommitSha: headSha, tagBodyRaw: JSON.stringify(tagBody) } }];"
+      },
+      "notes": "Corps de POST /git/tags. Leve une erreur si le HEAD est introuvable : la chaine s'arrete AVANT la suppression, la branche reste donc en vie."
+    },
+    {
+      "id": "d6bd8052-7f7c-447a-bd98-af6a2e348f9f",
+      "name": "🐙 GitHub: Creer objet tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        960,
+        -480
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.githubOwner }}/{{ $json.githubRepo }}/git/tags",
+        "body": "={{ $json.tagBodyRaw }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "POST /git/tags : cree l'objet tag annote (pas encore la reference). Idempotent a payload identique, donc rejouable sans risque.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "4d111321-143a-4dd1-a576-dba565dc25b7",
+      "name": "🐙 GitHub: Creer reference tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1184,
+        -480
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('🧩 Preparer le tag archive').first().json.githubOwner }}/{{ $('🧩 Preparer le tag archive').first().json.githubRepo }}/git/refs",
+        "body": "={{ JSON.stringify({ ref: 'refs/tags/' + $('🧩 Construire le tag annote').first().json.archiveTag, sha: $json.sha }) }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "POST /git/refs : rend le tag visible et permanent. Pas de retry ici — un rejeu apres succes renverrait 422.",
+      "onError": "stopWorkflow",
+      "retryOnFail": false
+    },
+    {
+      "id": "47941225-3fb6-4ca8-959e-c8121df6fbf1",
+      "name": "🐙 GitHub: Supprimer la branche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1408,
+        -608
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/git/refs/heads/{{ $('🧩 Decision: contexte').first().json.branchName }}",
+        "method": "DELETE",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "Deux entrees : apres le tag d'archive (candidature envoyee), et directement depuis l'aiguillage sur « refuser ». Les deux lisent branchName dans « Decision: contexte », jamais dans $json, qui n'a pas la meme forme selon le chemin.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "9aaaf9a9-d258-444e-8b24-41a93036dab1",
+      "name": "📧 Confirmation de suppression",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1632,
+        -608
+      ],
+      "parameters": {
+        "sendTo": "={{ $('⚙️ Config').first().json.candidateEmail }}",
+        "subject": "={{ $('🧩 Construire le tag annote').isExecuted ? '🗄️ Candidature archivée - ' + $('🧩 Construire le tag annote').first().json.archiveTag : '🗑️ Branche supprimée sans envoi - ' + $('🧩 Decision: contexte').first().json.branchName }}",
+        "message": "={{ $('🧩 Construire le tag annote').isExecuted ? '<h2>🗄️ Candidature archivée</h2><p>La branche <strong>' + $('🧩 Decision: contexte').first().json.branchName + '</strong> a été supprimée. Le CV et la lettre <strong>exactement tels qu&rsquo;envoyés</strong> restent lisibles grâce au tag annoté <strong>' + $('🧩 Construire le tag annote').first().json.archiveTag + '</strong>.</p><p><strong>Pour les relire :</strong></p><pre>git fetch origin --tags<br>git show ' + $('🧩 Construire le tag annote').first().json.archiveTag + '<br>git show ' + $('🧩 Construire le tag annote').first().json.archiveTag + ':' + $('🧩 Construire le tag annote').first().json.pdfPath + ' &gt; cv-envoye.pdf<br>git show ' + $('🧩 Construire le tag annote').first().json.archiveTag + ':' + $('🧩 Construire le tag annote').first().json.docxPath + ' &gt; lettre-envoyee.docx</pre><p><em>Le <code>--tags</code> n&rsquo;est pas optionnel : le commit archivé n&rsquo;est plus atteignable depuis main, un <code>git fetch</code> nu ne ramènerait pas le tag.</em></p><ul><li>Dépôt : ' + $('⚙️ Config').first().json.githubOwner + '/' + $('⚙️ Config').first().json.githubRepo + '</li><li>Commit archivé : ' + $('🧩 Construire le tag annote').first().json.archiveCommitSha + '</li><li>Destinataire : ' + $('🧩 Construire le tag annote').first().json.recipient + '</li><li>Date : ' + $now.format('dd/MM/yyyy HH:mm') + '</li><li>Suivi des relances : ' + (!$('🌐 career-ops: tracker Applied').isExecuted ? '<strong>non tenté</strong>' : ($('🌐 career-ops: tracker Applied').first().json.statusCode === 200 ? 'armé, ligne du tracker passée à <code>Applied</code>' : '<strong>NON ARMÉ</strong> : ' + (($('🌐 career-ops: tracker Applied').first().json.body || {}).error || 'le tracker a refusé l&rsquo;écriture') + '. Aucune relance automatique ne partira pour cette candidature tant qu&rsquo;elle n&rsquo;a pas de ligne au tracker.')) + '</li></ul>' : '<h2>🗑️ Branche supprimée sans envoi</h2><p>La branche <strong>' + $('🧩 Decision: contexte').first().json.branchName + '</strong> a été supprimée sans qu&rsquo;aucune candidature ne soit envoyée (offre refusée à la validation). Aucun tag <code>sent/</code> n&rsquo;a donc été posé.</p><p>Motif : ' + ($('🧩 Decision: contexte').first().json.raison || 'non precise') + '</p><p>Date : ' + $now.format('dd/MM/yyyy HH:mm') + '</p>' }}",
+        "options": {
+          "appendAttribution": false
+        },
+        "resource": "message",
+        "operation": "send"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Toujours a Lineo. Distingue « archivee puis supprimee » de « supprimee sans envoi » (refus) par isExecuted sur le noeud de tag.",
+      "webhookId": "A_REGENERER",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "d151f67e-12c6-419f-a2f5-8ec42a8558f7",
+      "name": "🐘 Postgres: envoi + relance",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1408,
+        -352
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH e AS (SELECT $1::jsonb AS d),\nmaj AS (\n  UPDATE career_ops.candidature cand\n     SET statut      = 'ENVOYEE',\n         envoyee_le  = COALESCE(cand.envoyee_le, NULLIF(d->>'envoyee_le', '')::timestamptz, now()),\n         message_id  = COALESCE(NULLIF(btrim(COALESCE(d->>'message_id', '')), ''), cand.message_id),\n         -- Prerequis du workflow 4 : le fil est le seul indice fiable pour\n         -- rattacher une reponse de recruteur. A defaut de threadId, on retombe\n         -- sur message_id, qui vaut le threadId pour un fil ouvert par nous.\n         fil_gmail   = COALESCE(NULLIF(btrim(COALESCE(d->>'fil_gmail', '')), ''), cand.fil_gmail,\n                                NULLIF(btrim(COALESCE(d->>'message_id', '')), '')),\n         tag_archive = COALESCE(NULLIF(btrim(COALESCE(d->>'tag_archive', '')), ''), cand.tag_archive),\n         projete_le  = now()\n    FROM e\n   WHERE cand.branche_github = d->>'branche_github'\n  RETURNING cand.id, cand.envoyee_le\n),\nrel AS (\n  INSERT INTO career_ops.relance (candidature_id, echeance, rang)\n  SELECT id,\n         (envoyee_le + make_interval(\n            days => career_ops.parametre_entier('relance_delai_jours', 7)))::date,\n         1\n  FROM maj\n  ON CONFLICT (candidature_id, echeance) DO NOTHING\n  RETURNING id, echeance\n)\nSELECT (SELECT id FROM maj)          AS candidature_id,\n       (SELECT envoyee_le FROM maj)  AS envoyee_le,\n       (SELECT echeance FROM rel)    AS relance_echeance,\n       (SELECT count(*) FROM maj)    AS candidature_maj",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [JSON.stringify({ branche_github: $('🧩 Decision: contexte').first().json.branchName, envoyee_le: $now.toISO(), message_id: $('🧩 Preparer le tag archive').first().json.gmailMessageId, fil_gmail: $('🧩 Preparer le tag archive').first().json.gmailThreadId, tag_archive: $('🧩 Construire le tag annote').first().json.archiveTag })] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "A_RECONNECTER",
+          "name": "postgres (a reconnecter)"
+        }
+      },
+      "notes": "db/upsert.sql requete 3. Branche laterale depuis « Creer reference tag » : le tag est deja pose quand on arrive ici, et la suppression de branche part en parallele sans dependre de la projection. statut ENVOYEE + envoyee_le + message_id + tag_archive, et amorce la relance a envoi + relance_delai_jours (lu en base). Idempotent : ENVOYEE n'est jamais ecrase, et (candidature_id, echeance) empeche une 2e relance a la meme date.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "664386d2-1b01-4cb7-b5b5-10f2176b06b3",
+      "name": "📧 Portail: tout pret a coller",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        -192
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config').first().json.candidateEmail }}",
+        "subject": "=[À DÉPOSER] {{ $json.fiche.entreprise }} — {{ $json.fiche.poste }}",
+        "message": "=<h2>Validé — dépôt manuel sur le portail</h2>\n\n<p><strong>Rien n'a été envoyé</strong> : aucune adresse de recruteur exploitable n'a été trouvée. Il faut déposer la candidature toi-même.</p>\n\n<p><strong>Offre :</strong> <a href=\"{{ $json.fiche.url_offre }}\">{{ $json.fiche.url_offre }}</a><br>\n<strong>Entreprise :</strong> {{ $json.fiche.entreprise }}<br>\n<strong>Poste :</strong> {{ $json.fiche.poste }}</p>\n\n<p>CV et lettre en pièces jointes. La branche <code>{{ $json.branchName }}</code> est <strong>conservée</strong> pour que tu puisses y revenir.</p>\n\n<hr>\n<h3>Recherche du contact</h3>\n<p>{{ $json.contactMotif || 'non effectuée' }}<br>\n<small>Sources consultées : {{ ($json.contactSourcesConsultees || []).join(' · ') || '—' }}</small></p>\n{{ ($json.contactCandidats || []).length ? '<p><strong>Adresses vues mais non retenues</strong> (aucune n&rsquo;a été utilisée) :</p><ul><li>' + ($json.contactCandidats || []).map(c => c.courriel + ' — <em>' + c.motif + '</em>').join('</li><li>') + '</li></ul><p><small>Si l&rsquo;une d&rsquo;elles est la bonne, ajoute-la à <code>data/contacts.tsv</code> : elle sera utilisée automatiquement la prochaine fois.</small></p>' : '' }}\n\n<hr>\n<h3>Objet à coller</h3>\n<p>{{ $json.fiche.objet_mail }}</p>\n\n<h3>Message à coller</h3>\n<blockquote>\n{{ $json.fiche.salutation }}<br><br>\n{{ String($json.fiche.apercu_lettre || '').replace(/\\n/g, '<br>') }}<br><br>\n{{ (Array.isArray($json.fiche.arguments_cles) ? $json.fiche.arguments_cles : []).join('<br>') }}\n</blockquote>",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "={{ $json.attachmentProps || 'data' }}"
+              }
+            ]
+          },
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Valide mais aucun courriel recruteur connu : Lineo depose a la main. La branche est CONSERVEE, et aucun tag sent/ n'est pose (rien n'est parti).",
+      "webhookId": "A_REGENERER",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "69401c6f-9fdb-48cf-822d-e7e380d35be3",
+      "name": "🐘 Postgres: depot portail",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        64,
+        -192
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH e AS (SELECT $1::jsonb AS d),\nmaj AS (\n  UPDATE career_ops.candidature cand\n     SET statut = 'PORTAIL_A_COLLER', projete_le = now()\n    FROM e\n   WHERE cand.branche_github = d->>'branche_github'\n     AND cand.statut NOT IN ('ENVOYEE', 'REFUSEE')\n  RETURNING cand.id\n)\nSELECT (SELECT id FROM maj) AS candidature_id, (SELECT count(*) FROM maj) AS candidature_maj",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [JSON.stringify({ branche_github: $('🧩 Decision: contexte').first().json.branchName })] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "A_RECONNECTER",
+          "name": "postgres (a reconnecter)"
+        }
+      },
+      "notes": "Aucun courriel recruteur : rien n'est parti. statut PORTAIL_A_COLLER, envoyee_le reste NULL, aucune relance amorcee. db/upsert.sql requete 4.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "a7ef20c4-5e1a-485a-be07-92d1dab5489d",
+      "name": "🌐 career-ops: journal des offres",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1056,
+        96
+      ],
+      "parameters": {
+        "url": "={{ $('⚙️ Config').first().json.careerOpsBase }}/api/offers",
+        "options": {
+          "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "GET /api/offers : le journal append-only des offres. C'est la SEULE source qui porte encore la description complete de l'annonce, indispensable pour readapter le CV. La fiche inbox ne la stocke pas.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "0a6e3eae-4066-4630-bcb6-66f6812b5b04",
+      "name": "🧩 Retouche: consigne",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        96
+      ],
+      "parameters": {
+        "jsCode": "// Retouche : on renvoie la candidature au workflow 2 avec la consigne libre de\n// Lineo. Le ficheId et la BRANCHE sont repris tels quels : le workflow 2 committe\n// alors sur la meme branche cv/<...> et incremente la revision. Une branche neuve\n// perdrait le round precedent.\nconst ctx = $('🧩 Decision: contexte').first().json;\nconst fiche = ctx.fiche ?? {};\nconst rep = $json ?? {};\n\nconst offres = Array.isArray(rep.offres) ? rep.offres : [];\nconst jobId = String(fiche.job_id || '').trim();\n\n// Appariement par job_id, la seule cle stable. Repli sur entreprise + poste\n// normalises, parce qu'une fiche v1 (avant l'ajout de job_id) n'en a pas.\nconst norm = (s) => String(s || '')\n  .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n  .toLowerCase().replace(/\\s+/g, ' ').trim();\n\nlet offre = null;\nif (jobId) offre = offres.find((o) => String(o.jobId ?? o.id ?? '').trim() === jobId) || null;\nif (!offre) {\n  offre = offres.find((o) => norm(o.company) === norm(fiche.entreprise)\n    && norm(o.title) === norm(fiche.poste)) || null;\n}\n\nconst cible = ctx.decision === 'retoucher_cv' ? 'cv' : 'lettre';\n\nconst job = {\n  jobId: jobId || String(offre?.jobId ?? ''),\n  title: String(offre?.title || fiche.poste || ''),\n  company: String(offre?.company || fiche.entreprise || ''),\n  location: offre?.location ?? fiche.lieu ?? null,\n  url: String(offre?.url || fiche.url_offre || ''),\n  description: String(offre?.description || ''),\n  whyMatch: String(offre?.whyMatch || fiche.pourquoi_ca_matche || ''),\n  contactEmail: String(ctx.courrielContact || ''),\n  score: offre?.score ?? fiche.score ?? null,\n};\n\n// Le workflow 2 refuse une offre sans title NI description : on echoue ici, ou le\n// message est lisible, plutot que dans un 400 au milieu de sa chaine.\nif (!job.title && !job.description) {\n  throw new Error('retouche impossible : offre ' + (jobId || '(sans job_id)')\n    + ' introuvable dans /api/offers et fiche sans poste. Rien n a ete renvoye au workflow 2.');\n}\n\nconst charge = {\n  mode: 'retouche',\n  ficheId: ctx.inboxId,\n  branche: ctx.branchName,\n  consigne: ctx.consigne,\n  cible,\n  job,\n};\n\nreturn [{\n  json: {\n    cible,\n    // Sans description, le workflow 2 readapte sur le seul intitule : c'est moins\n    // bon, et ca doit se voir dans l'execution plutot que se deviner.\n    offreRetrouvee: Boolean(offre),\n    descriptionDisponible: Boolean(job.description),\n    ficheId: ctx.inboxId,\n    branche: ctx.branchName,\n    consigne: ctx.consigne,\n    wf2PayloadRaw: JSON.stringify(charge),\n  },\n}];"
+      },
+      "notes": "Reconstruit la charge utile attendue par le webhook du workflow 2 en mode retouche : meme ficheId et MEME branche, donc pas de branche neuve et revision incrementee cote workflow 2."
+    },
+    {
+      "id": "fc586103-67b3-4482-89e3-fab74ae4c0fa",
+      "name": "🌐 Workflow 2: relancer la generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -608,
+        96
+      ],
+      "parameters": {
+        "url": "={{ $('⚙️ Config').first().json.wf2Webhook }}",
+        "body": "={{ $json.wf2PayloadRaw }}",
+        "method": "POST",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "POST sur le webhook du workflow 2 (candidature-generer) en mode retouche. Le workflow 2 repond immediatement puis travaille en tache de fond : ce noeud n'attend pas le nouveau CV.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "bd32b62b-1a65-4450-bdf5-3f53549ce2f2",
+      "name": "📧 Alerte technique (Lineo)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1056,
+        384
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config').first().json.candidateEmail }}",
+        "subject": "=[ALERTE n8n] Aucune candidature envoyée — {{ $json.fiche?.entreprise || 'offre inconnue' }}",
+        "message": "=<h2>⚠️ Incident — aucune candidature n'est partie</h2>\n\n<p>{{ $json.decisionBrute ? 'Décision non reconnue : <code>' + $json.decisionBrute + '</code>. Les seules valeurs acceptées sont valider, retoucher_lettre, retoucher_cv, refuser.' : 'Aucune décision reçue dans le corps de la requête.' }}</p>\n\n<p><strong>Fiche :</strong> <code>{{ $json.inboxId }}</code><br>\n<strong>Offre :</strong> {{ $json.fiche?.url_offre || '—' }}<br>\n<strong>Branche conservée :</strong> <code>{{ $json.branchName || '—' }}</code></p>\n\n<p>Aucun mail n'a été adressé à un recruteur. La branche est conservée pour diagnostic.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Decision non reconnue. TOUJOURS a Lineo, jamais au recruteur. La branche est conservee pour diagnostic.",
+      "webhookId": "A_REGENERER",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "eca06bb4-d272-4108-850c-388b14cdad94",
+      "name": "🌐 career-ops: relances dues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1952,
+        1200
+      ],
+      "parameters": {
+        "url": "={{ $('⚙️ Config relances').first().json.careerOpsBase }}/api/followups?full=1",
+        "options": {
+          "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-relances"
+            }
+          ]
+        }
+      },
+      "notes": "Contrat gele cote career-ops : GET /api/followups?full=1. C'est followup-cadence.mjs qui calcule la cadence, on ne la reimplemente pas ici. Un echec est rattrape par le noeud suivant, qui jette explicitement plutot que de ne relancer personne en silence.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "0dcdaec2-4a8f-4e61-b6f6-1fb02b2edbf6",
+      "name": "🧩 Relances: normaliser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1728,
+        1200
+      ],
+      "parameters": {
+        "jsCode": "// Contrat gele : GET /api/followups?full=1\n//   -> { due: [ { id, entreprise, poste, courriel_contact, jours_depuis_envoi } ],\n//        cadenceConfig: { applied_first, applied_max_followups, ... } }\n// La cadence de relance (delai, nombre maxi) est une valeur de CONFIG career-ops,\n// pas une constante inventee ici. Ordre de priorite : cadenceConfig de l'API,\n// puis les valeurs de repli de « Config relances », puis les defauts documentes.\n// L'ancienne forme { available, entries: [...] } reste acceptee.\nconst cfg = $('⚙️ Config relances').first().json;\nconst rep = $input.first().json ?? {};\n\n// Le noeud HTTP est en onError=continueRegularOutput : un echec reseau arrive\n// ici sous forme d'item vide. Zero relance en silence serait PIRE qu'une erreur\n// visible : Lineo cesserait de relancer sans jamais l'apprendre. Donc on jette.\nif (rep.due === undefined && rep.entries === undefined) {\n  throw new Error('GET /api/followups injoignable ou hors contrat. Reponse recue : ' + JSON.stringify(rep).slice(0, 300));\n}\n\nconst brut = Array.isArray(rep.due) ? rep.due : (Array.isArray(rep.entries) ? rep.entries : []);\n\n// ── Cadence : ce qu'il y a dans la config career-ops fait foi ────────────────\nconst cc = rep.cadenceConfig ?? rep.metadata?.cadenceConfig ?? {};\nconst premierEntier = (...valeurs) => {\n  for (const v of valeurs) {\n    const n = Number(v);\n    if (Number.isFinite(n) && n > 0) return Math.floor(n);\n  }\n  return null;\n};\nconst relanceDelaiJours = premierEntier(\n  cc.applied_first_days, cc.appliedFirstDays, cc.applied_first, cc.first_days,\n  cfg.relanceSeuilJours, 7,\n);\nconst relanceMax = premierEntier(\n  cc.applied_max_followups, cc.appliedMaxFollowups, cc.max_followups, cc.applied_max,\n  cfg.relanceMax, 2,\n);\nconst cadenceSource = premierEntier(cc.applied_first_days, cc.appliedFirstDays, cc.applied_first, cc.first_days)\n  ? 'config career-ops (/api/followups?full=1)'\n  : 'repli : valeurs par defaut documentees';\n\nconst maxi = premierEntier(cfg.maxRelancesParExecution, 3);\n\nconst slug = (v) => String(v || '')\n  .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '-')\n  .replace(/^-+|-+$/g, '').slice(0, 40);\n\nconst retenues = [];\nfor (const e of brut) {\n  const entreprise = String(e.entreprise ?? e.company ?? '').trim();\n  const poste = String(e.poste ?? e.role ?? e.title ?? '').trim();\n  // Sans entreprise on ne sait ni quoi ecrire, ni quoi retrouver dans le tracker.\n  if (!entreprise) continue;\n  const jours = Number(e.jours_depuis_envoi ?? e.daysSinceApplied ?? NaN);\n  // Un champ absent passe volontairement : c'est la cadence career-ops qui fait\n  // foi, on ne re-filtre que quand la valeur existe vraiment.\n  if (Number.isFinite(jours) && jours < relanceDelaiJours) continue;\n  // L'id NE contient PAS de date : c'est la cle de l'historique des relances\n  // deja envoyees pour cette candidature. Sans ca, un cron quotidien renverrait\n  // la meme relance au recruteur chaque jour.\n  retenues.push({\n    relanceId: 'relance-' + (slug(entreprise) || 'entreprise') + '-' + (slug(poste) || 'poste'),\n    sourceId: String(e.id ?? ''),\n    entreprise,\n    poste,\n    courrielContact: String(e.courriel_contact ?? e.contactEmail ?? '').trim(),\n    joursDepuisEnvoi: Number.isFinite(jours) ? jours : null,\n    envoyeeLe: String(e.envoyee_le ?? e.appliedAt ?? '').trim(),\n    urlOffre: String(e.url ?? e.url_offre ?? '').trim(),\n    relanceDelaiJours,\n    relanceMax,\n    cadenceSource,\n    consigneRetouche: '',\n  });\n}\n\n// Plafond par execution. Rien n'est tronque en silence : le nombre reporte part\n// dans le bilan de fin de tournee, et la relance ressortira a la prochaine.\nconst gardees = retenues.slice(0, maxi);\nconst reportees = retenues.length - gardees.length;\n\nreturn gardees.map((r) => ({ json: { ...r, relancesDues: retenues.length, relancesReportees: reportees } }));"
+      },
+      "notes": "Accepte le contrat gele { due: [...] } ET la forme { entries: [...] }. Jette si la reponse est hors contrat : une tournee vide silencieuse serait indetectable. La cadence vient de cadenceConfig, les valeurs de Config relances ne sont qu'un repli."
+    },
+    {
+      "id": "beb8330b-16eb-4380-ad71-2612299772f8",
+      "name": "🔁 Boucle relances",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1504,
+        1200
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "notes": "Une relance a la fois. Sortie 0 = fin de tournee, sortie 1 = l'item courant."
+    },
+    {
+      "id": "fb2c8d1a-a6ae-4a19-abd9-4ce3e1401bef",
+      "name": "🧩 Relances: fin de tournee",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        1040
+      ],
+      "parameters": {
+        "jsCode": "// Bilan de fin de tournee. Aucun envoi ici : chaque relance a deja ete tranchee\n// automatiquement (envoyee, arretee par une regle de cadence, ou deposee a la main).\nconst items = $input.all();\nreturn [{\n  json: {\n    relancesTraitees: items.length,\n    finLe: new Date().toISOString(),\n  },\n}];"
+      },
+      "notes": "Sortie « done » de la boucle. Trace de fin, aucun effet de bord."
+    },
+    {
+      "id": "7dd0b75d-3698-48a4-b3e7-ee8085e65999",
+      "name": "🐙 GitHub: Historique relance ?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1280,
+        1328
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config relances').first().json.githubOwner }}/{{ $('⚙️ Config relances').first().json.githubRepo }}/contents/data-inbox/relances/{{ $json.relanceId }}.json?ref={{ $('⚙️ Config relances').first().json.githubBaseBranch }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-relances"
+            }
+          ]
+        }
+      },
+      "notes": "Lit data-inbox/relances/<id>.json : la liste des relances DEJA envoyees pour cette candidature. 404 attendu la premiere fois (onError laisse passer un item vide). C'est ce fichier qui empeche un cron quotidien de renvoyer la meme relance chaque jour. Sous-dossier volontaire : career-ops ne lit data-inbox/ qu'a plat, donc ces fiches ne polluent pas la page « A valider ».",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "80abc986-b70d-4174-8908-2056fc38e6ef",
+      "name": "🧩 Relance: decider",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        1328
+      ],
+      "parameters": {
+        "jsCode": "// Relances AUTOMATIQUES : pas de porte de validation, pas de recalcul manuel.\n// Soit la relance part, soit elle est arretee, et c'est une regle qui tranche.\n//\n// Les deux bornes viennent de la CONFIG career-ops, remontee par le normaliseur\n// (cadenceConfig de /api/followups?full=1) : espacement et nombre maxi.\nconst rel = $('🔁 Boucle relances').first().json;\nconst prev = $input.first().json ?? {};\n\n// Historique des relances deja envoyees (404 la premiere fois -> item vide).\nlet histoire = { relances: [] };\nlet sha = null;\nif (typeof prev.sha === 'string' && prev.sha) {\n  sha = prev.sha;\n  try {\n    const lu = JSON.parse(\n      Buffer.from(String(prev.content || '').replace(/\\n/g, ''), 'base64').toString('utf8'),\n    );\n    if (lu && typeof lu === 'object') histoire = lu;\n  } catch (e) {\n    // Fiche illisible : on la traite comme vide plutot que de bloquer la tournee.\n    histoire = { relances: [] };\n  }\n}\n\nconst envoyees = Array.isArray(histoire.relances) ? histoire.relances : [];\nconst rang = envoyees.length + 1;\nconst max = Number(rel.relanceMax || 2);\nconst espacement = Number(rel.relanceDelaiJours || 7);\nconst histPath = 'data-inbox/relances/' + rel.relanceId + '.json';\nconst histArret = (histoire && typeof histoire.arret === 'object') ? histoire.arret : null;\n\n// ── ARRET : EN TOUT PREMIER, AVANT LE PLAFOND ET AVANT L'ESPACEMENT ─────────\n// Le recruteur a repondu, et c'est le workflow 4 (ecoute Gmail, gVPaJrIaXNqC2ZDP)\n// qui l'a inscrit dans ce fichier. Aucune autre regle n'a son mot a dire : ni le\n// plafond pas atteint, ni l'espacement respecte. Sans ces lignes, WF4 ecrit dans\n// le vide et la tournee du lendemain relance quelqu'un qui a deja repondu.\n// `actif !== false` plutot que `=== true` : un fichier corrige a la main avec un\n// simple { \"arret\": { \"motif\": \"...\" } } doit arreter la relance aussi. Sur ce\n// chemin-la, le doute coupe, il ne laisse pas passer.\n// Copie de reference versionnee : n8n/wf3-relance-decider.js du depot cv.\nif (histArret && histArret.actif !== false) {\n  return [{\n    json: {\n      ...rel,\n      rang,\n      envoyable: false,\n      motifArret: 'arret : ' + (histArret.motif || 'reponse du recruteur')\n        + (histArret.arrete_le ? ' (' + histArret.arrete_le + ')' : ''),\n      arretActif: true,\n      arretTypeReponse: histArret.type_reponse || '',\n      histArret,\n      histSha: sha,\n      histRelances: envoyees,\n      histPath,\n    },\n    pairedItem: 0,\n  }];\n}\n\nlet envoyable = true;\nlet motifArret = '';\n\nif (envoyees.length >= max) {\n  envoyable = false;\n  motifArret = 'plafond atteint : ' + envoyees.length + ' relance(s) deja envoyee(s), maximum ' + max + ' (config career-ops)';\n} else {\n  const derniere = envoyees[envoyees.length - 1];\n  const quand = derniere && derniere.envoyee_le ? Date.parse(derniere.envoyee_le) : NaN;\n  if (Number.isFinite(quand)) {\n    const jours = Math.floor((Date.now() - quand) / 86400000);\n    if (jours < espacement) {\n      envoyable = false;\n      motifArret = 'derniere relance il y a ' + jours + ' j, espacement minimum ' + espacement + ' j (config career-ops)';\n    }\n  }\n}\n\nreturn [{\n  json: {\n    ...rel,\n    rang,\n    envoyable,\n    motifArret,\n    arretActif: false,\n    arretTypeReponse: '',\n    histArret,\n    histSha: sha,\n    histRelances: envoyees,\n    histPath,\n  },\n  pairedItem: 0,\n}];"
+      },
+      "notes": "AUCUNE decision humaine ici : soit la relance part, soit elle est arretee, et la regle est deterministe. Arret si le plafond de relances est atteint, ou si la derniere relance est trop recente. Les deux bornes viennent de la cadence career-ops."
+    },
+    {
+      "id": "35d47a6e-906d-4965-9102-31b637f1705e",
+      "name": "🔀 Relance: envoyable ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -832,
+        1328
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "rel-env-1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.envoyable }}",
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "notes": "Sortie fausse = relance arretee par une regle de cadence (plafond ou espacement). Retour direct a la boucle, sans mail : ce n'est pas une anomalie, c'est le fonctionnement normal, et un mail par jour pour le dire serait du bruit."
+    },
+    {
+      "id": "1f707113-418f-4ee5-91d2-f014136b8beb",
+      "name": "🌐 career-ops: brouillon de relance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -608,
+        1200
+      ],
+      "parameters": {
+        "url": "={{ $('⚙️ Config relances').first().json.careerOpsBase }}/api/followup-draft",
+        "body": "={{ JSON.stringify({ relance: { entreprise: $json.entreprise, poste: $json.poste, joursDepuisEnvoi: $json.joursDepuisEnvoi, envoyeeLe: $json.envoyeeLe, urlOffre: $json.urlOffre, rang: $json.rang, relanceMax: $json.relanceMax, candidat: $('⚙️ Config relances').first().json.candidateName }, consigne: $json.consigneRetouche || '' }) }}",
+        "method": "POST",
+        "options": {
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-relances"
+            }
+          ]
+        }
+      },
+      "notes": "POST /api/followup-draft. Remplace l'ancien agent LangChain : le texte part chez un recruteur, donc ses regles vivent dans career-ops (testees, rejouables) et pas dans un prompt ecrit dans n8n. followup-draft.mjs refuse notamment une relance qui invente un echange. Appel LLM : timeout aligne sur maxDuration=300 de la route.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "af1bca4a-2289-45fd-a14d-98fd6709e1ee",
+      "name": "🧩 Relance: message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        1200
+      ],
+      "parameters": {
+        "jsCode": "// POST /api/followup-draft rend { objet, corps, mots, compte } a plat : on le\n// raccroche a la relance pour que l'aiguillage et l'envoi aient le destinataire.\nconst rel = $('🧩 Relance: decider').first().json;\nconst out = $input.first().json ?? {};\n\nconst objet = String(out.objet ?? '').trim();\nconst corps = String(out.corps ?? '').trim();\n\n// Garde-fou : career-ops a deja ses propres refus (echange invente, duree\n// inventee, longueur). Celui-ci ne couvre qu'un cas : une reponse vide ou\n// tronquee qui deviendrait un courriel vide chez le recruteur. On prefere une\n// tournee en erreur, visible, a un envoi muet.\nif (!objet || !corps) {\n  throw new Error('brouillon de relance vide pour ' + (rel.entreprise || '?')\n    + \" : rien n'a ete envoye. Reponse : \" + JSON.stringify(out).slice(0, 300));\n}\n\n// Nettoyage aligne sur le CV et la lettre : ni tiret cadratin ni markdown.\n// career-ops nettoie deja (nettoieRelance), ceci est une ceinture de plus.\nconst cleanTxt = (s) => String(s || '')\n  .replace(/\\*\\*([^*]+)\\*\\*/g, '$1')\n  .replace(/\\[([^\\]]+)\\]\\([^)]+\\)/g, '$1')\n  .replace(/ [—–] /g, ', ').replace(/[—–]/g, ', ');\n\nreturn [{\n  json: { ...rel, objet: cleanTxt(objet), corps: cleanTxt(corps), mots: out.mots ?? null },\n  pairedItem: 0,\n}];"
+      },
+      "notes": "Raccroche le brouillon de career-ops a l'item de relance (destinataire, rang) et refuse un brouillon vide : mieux vaut une tournee en erreur qu'un courriel vide chez un recruteur."
+    },
+    {
+      "id": "2b1c8652-13da-44f1-8fce-077b3cef9834",
+      "name": "🔀 Courriel recruteur connu ? (relance)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        1200
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "rel-if-1",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.courrielContact }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "notes": "Sans courriel recruteur, la relance ne peut pas partir : elle va a Lineo pour depot manuel. Aucun envoi a l'aveugle."
+    },
+    {
+      "id": "3aceed2f-6845-4209-b9f0-99c5063823fb",
+      "name": "📧 Send: Relance",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        64,
+        1072
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.courrielContact }}",
+        "subject": "={{ $json.objet }}",
+        "message": "={{ String($json.corps || '').replace(/\\n/g, '<br>') }}\n<br><br>\n{{ $('⚙️ Config relances').first().json.candidatePhone }} | {{ $('⚙️ Config relances').first().json.candidateEmail }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Le SEUL envoi de la branche relances. Aucune piece jointe : le CV et la lettre sont deja partis avec la candidature.",
+      "webhookId": "A_REGENERER",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "902ec977-f264-443b-816c-f64bfe584cd7",
+      "name": "🧩 Relance: historique + sha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        1328
+      ],
+      "parameters": {
+        "jsCode": "// Trace versionnee de ce qui part chez le recruteur, et surtout CLE DE\n// DEDUPLICATION de la prochaine tournee : sans ce fichier, un cron quotidien\n// renverrait la meme relance chaque jour.\n// Sous-dossier data-inbox/relances/ : career-ops ne lit data-inbox/ qu'a plat,\n// donc rien n'apparait sur la page « A valider » (ces relances ne se decident\n// plus, elles s'envoient).\n//\n// POURQUOI CE NOEUD EST EN PARALLELE DE L'ENVOI, ET PAS APRES :\n// deux tentatives ont echoue le 2026-08-05.\n//  - execution 958254, en serie apres Gmail avec .first() : l'historique de la\n//    relance B a ete ecrit en y collant le message_id de l'envoi de A. Dans une\n//    boucle, .first() rend le premier item du DERNIER run du noeud, pas celui de\n//    l'iteration courante.\n//  - executions 958257 et 958259, avec .item : le chainage d'items ne se\n//    remonte pas a travers le noeud Gmail, quel que soit le mode du noeud Code.\n// En branchant ce noeud directement sur la sortie de l'aiguillage, l'item recu\n// EST celui de l'iteration : plus aucune recherche inter-noeuds, donc plus aucune\n// confusion possible entre deux relances.\n//\n// Contrepartie assumee : cette branche n'attend pas la confirmation de Gmail,\n// donc pas de message_id dans l'historique, et un envoi definitivement en echec\n// laisse quand meme la relance marquee comme faite. C'est le sens d'echec le plus\n// sur pour un envoi automatique : une relance manquee vaut mieux qu'un doublon\n// chez le recruteur. L'envoi a 3 tentatives pour limiter le cas.\nconst rel = $input.first().json ?? {};\nconst cfg = $('⚙️ Config relances').first().json;\n\nif (!rel.relanceId) {\n  throw new Error(\"item de relance sans relanceId : rien n'est ecrit dans l'historique\");\n}\n\nconst relances = [\n  ...(Array.isArray(rel.histRelances) ? rel.histRelances : []),\n  {\n    rang: rel.rang,\n    envoyee_le: new Date().toISOString(),\n    objet: rel.objet,\n    destinataire: rel.courrielContact,\n    execution_id: String($execution.id),\n    jours_depuis_envoi_candidature: rel.joursDepuisEnvoi,\n  },\n];\n\nconst fiche = {\n  schema: 'career-ops-relances/v1',\n  id: rel.relanceId,\n  entreprise: rel.entreprise,\n  poste: rel.poste,\n  courriel_contact: rel.courrielContact,\n  url_offre: rel.urlOffre,\n  cadence: {\n    espacement_jours: rel.relanceDelaiJours,\n    maximum: rel.relanceMax,\n    source: rel.cadenceSource,\n  },\n  relances,\n};\n\n// Un arret ecrit par le workflow 4 SURVIT a cette reecriture. Ce noeud\n// reconstruit la fiche de zero : sans cette recopie, il effacerait la seule cle\n// qui empeche les relances de repartir. On ne devrait pas etre la (le garde de\n// « Relance: decider » coupe avant), mais un fichier qui perd sa propre cle\n// d'arret est le genre de panne qu'on ne decouvre qu'une fois la relance partie.\nif (rel.histArret && typeof rel.histArret === 'object') {\n  fiche.arret = rel.histArret;\n}\n\nconst body = {\n  message:\n    (rel.histSha ? 'chore(relances): maj ' : 'chore(relances): ') +\n    (rel.entreprise || 'entreprise') + ' - relance ' + rel.rang,\n  content: Buffer.from(JSON.stringify(fiche, null, 2) + '\\n', 'utf8').toString('base64'),\n  branch: cfg.githubBaseBranch,\n};\nif (rel.histSha) body.sha = rel.histSha;\n\nreturn [{ json: { ...rel, histBodyRaw: JSON.stringify(body) } }];"
+      },
+      "notes": "EN PARALLELE de l'envoi Gmail, jamais apres : dans une boucle, .first() rend le premier item du dernier run du noeud, pas celui de l'iteration, et le chainage d'items ne traverse pas le noeud Gmail. Trois executions ont deja echoue la-dessus (958254, 958257, 958259)."
+    },
+    {
+      "id": "734d147b-8ffb-4d08-8285-2822f3299ca7",
+      "name": "🐙 GitHub: Ecrire l'historique relance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        1328
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config relances').first().json.githubOwner }}/{{ $('⚙️ Config relances').first().json.githubRepo }}/contents/{{ $json.histPath }}",
+        "body": "={{ $json.histBodyRaw }}",
+        "method": "PUT",
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-relances"
+            }
+          ]
+        }
+      },
+      "notes": "Marque la relance comme envoyee. Si ce PUT echoue definitivement, la prochaine tournee pourrait relancer une fois de trop : c'est pour ca qu'il a 3 tentatives et qu'il n'est PAS en onError=continue.",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "b40f6ad3-a89f-4a53-9ea0-910dadc05fae",
+      "name": "📧 Relance: depot manuel",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        64,
+        1568
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config relances').first().json.candidateEmail }}",
+        "subject": "=[RELANCE À DÉPOSER] {{ $json.entreprise }} — {{ $json.poste }}",
+        "message": "=<h2>Relance à déposer à la main</h2>\n<p>Aucun courriel recruteur n'est connu pour cette candidature : la relance ne peut pas partir automatiquement. <strong>Rien n'a été envoyé.</strong> Tout est prêt à coller.</p>\n<p><strong>Entreprise :</strong> {{ $json.entreprise }}<br>\n<strong>Poste :</strong> {{ $json.poste }}<br>\n<strong>Relance n° :</strong> {{ $json.rang }} sur {{ $json.relanceMax }}<br>\n<strong>Candidature envoyée il y a :</strong> {{ $json.joursDepuisEnvoi != null ? $json.joursDepuisEnvoi + ' jours' : 'durée inconnue' }}<br>\n<strong>Offre :</strong> {{ $json.urlOffre || 'inconnue' }}<br>\n<strong>Cadence :</strong> {{ $json.cadenceSource }}</p>\n<p><strong>Objet :</strong> {{ $json.objet }}</p>\n<blockquote>{{ String($json.corps || '').replace(/\\n/g, '<br>') }}</blockquote>\n<p><small>Ce dépôt manuel n'est pas compté comme une relance envoyée : l'historique n'est pas écrit, donc la même relance ressortira à la prochaine tournée tant qu'aucun courriel recruteur n'est connu.</small></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Aucun courriel recruteur connu : rien n'est parti. L'historique n'est PAS ecrit, donc la relance ressortira a la prochaine tournee.",
+      "webhookId": "A_REGENERER",
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "968df2bc-d90b-4ee6-822d-16541c9ccdcf",
+      "name": "🌐 career-ops: tracker Applied",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -160,
+        -672
+      ],
+      "parameters": {
+        "url": "={{ $('⚙️ Config').first().json.careerOpsBase }}/api/tracker/set-status",
+        "body": "={{ JSON.stringify({ entreprise: $('🧩 Decision: contexte').first().json.fiche.entreprise, statut: 'Applied', role: $('🧩 Decision: contexte').first().json.fiche.poste, creer: true, note: 'Applied ' + $now.setZone('Europe/Paris').toFormat('yyyy-MM-dd') + '; envoyee par n8n (workflow 3) a ' + $('🧩 Contact retenu').first().json.courrielContact }) }}",
+        "method": "POST",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        },
+        "notes": "Referme la boucle envoi -> relance. La tournee de relances ne lit PAS ce que ce workflow a envoye : elle lit le tracker data/applications.md via /api/followups. Sans ce noeud, une candidature reellement envoyee n'entre jamais dans la file de relances.\n\ncreer: true -> set-status.mjs --create. Une candidature preparee par n8n n'a AUCUNE ligne au tracker (les lignes naissent du flux d'evaluation local) ; sans --create la route rendait 422 et la relance n'etait jamais armee. La route amorce aussi la cadence (followup-seed.mjs, bug #1430) : marquer Applied ne suffisait pas, data/follow-ups.md restait vide.\n\nBranche PARALLELE de l'envoi, jamais en serie : le chemin d'archive lit $json.id (l'id du message Gmail) et doit continuer a recevoir la sortie de Gmail.\n\nIdempotent : un rejeu retrouve la ligne, ne la duplique pas, et ne rearme pas la cadence (followupSeedCandidate ne sort que sur une vraie transition vers Applied).\n\nL'adresse du recruteur est mise DANS la note : extractContacts() de followup-cadence.mjs la relit de la, et sans elle chaque relance retomberait en depot manuel. Le prefixe « Applied <date> » est lu par followup-seed pour dater la cadence."
+      },
+      "notes": "Referme la boucle envoi -> relance. La tournee de relances ne lit PAS ce que ce workflow a envoye : elle lit le tracker data/applications.md via /api/followups. Sans ce noeud, une candidature reellement envoyee n'entre jamais dans la file de relances.\n\nBranche PARALLELE de l'envoi, jamais en serie : le chemin d'archive lit $json.id (l'id du message Gmail) et doit continuer a recevoir la sortie de Gmail.\n\nneverError : set-status.mjs rend 422 quand la ligne n'existe pas au tracker (candidature venue de n8n, jamais evaluee en local). Ce n'est pas une panne, c'est un cas connu : on le lit et on le REMONTE dans le courriel de confirmation, plutot que de le subir en silence ou de teindre l'execution en rouge.\n\nL'adresse du recruteur est mise DANS la note : extractContacts() de followup-cadence.mjs la relit de la, et sans elle chaque relance retomberait en depot manuel.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c7a13520-2fb7-4786-998e-be62a1344ed4",
+      "name": "🌐 career-ops: chercher un contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -496,
+        -512
+      ],
+      "parameters": {
+        "url": "={{ $('⚙️ Config').first().json.careerOpsBase }}/api/contact-lookup",
+        "body": "={{ JSON.stringify({ entreprise: $json.fiche.entreprise, urlOffre: $json.fiche.url_offre }) }}",
+        "method": "POST",
+        "options": {
+          "timeout": 45000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "sendHeaders": true,
+        "rawContentType": "application/json",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-3-envoi"
+            }
+          ]
+        }
+      },
+      "notes": "Les offres France Travail ne portent AUCUNE adresse (verifie le 2026-08-07 : le champ n'existe pas dans les 6 offres du journal, et la page d'une annonce rendue fait 55 Ko sans une seule adresse). Sans ce noeud, toutes les candidatures partent en depot manuel et la branche d'envoi ne sert jamais.\n\nLa route ne DEVINE jamais une adresse : elle rend ce qu'elle a lu litteralement dans le carnet data/contacts.tsv ou dans le texte de l'annonce. Un courriel: null est un resultat correct, pas une panne.\n\nneverError + continueRegularOutput : une annonce injoignable ou un 500 ne doit pas empecher le depot manuel, qui lui marche deja.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "d627adf1-d743-4259-9f44-2cfc94f4e806",
+      "name": "🧩 Contact retenu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        -512
+      ],
+      "parameters": {
+        "jsCode": "// Le noeud HTTP qui precede a remplace l'item par sa reponse : les pieces\n// jointes assemblees par « Joindre CV + lettre » doivent etre rattachees ici,\n// sinon le courriel au recruteur partirait sans CV.\nconst ctx = $('🧩 Joindre CV + lettre').first().json;\nconst bin = $('🧩 Joindre CV + lettre').first().binary ?? {};\n\n// neverError + fullResponse : la reponse utile est dans .body, et un echec\n// arrive ici sous forme d'item sans body plutot qu'en exception.\nconst rep = ($json && typeof $json === 'object' && $json.body) ? $json.body : {};\n\nconst deLaFiche = String(ctx.courrielContact || '').trim();\nconst trouve = String(rep.courriel || '').trim();\nconst confiance = String(rep.confiance || 'aucune');\n\n// Haute  : carnet d'adresses, ou adresse de recrutement sur le domaine de\n//          l'entreprise.\n// Moyenne: adresse de recrutement, ou boite du domaine de l'entreprise.\n// En dessous : l'adresse a bien ete lue quelque part, mais rien ne la relie au\n// poste (le prestataire qui heberge la page, par exemple). Envoyer une\n// candidature la-dessus est pire que de ne pas l'envoyer : c'est irrattrapable.\nconst envoyable = trouve !== '' && (confiance === 'haute' || confiance === 'moyenne');\n\n// La fiche gagne toujours : si Lineo a renseigne une adresse a la main,\n// l'enrichissement n'a pas a la contredire.\nconst courrielContact = deLaFiche || (envoyable ? trouve : '');\n\nreturn [{\n  json: {\n    ...ctx,\n    courrielContact,\n    contactSource: deLaFiche ? 'fiche' : (courrielContact ? String(rep.source || 'annonce') : ''),\n    contactConfiance: deLaFiche ? 'fiche' : confiance,\n    contactMotif: deLaFiche ? 'adresse deja presente sur la fiche' : String(rep.motif || 'recherche non aboutie'),\n    contactCandidats: Array.isArray(rep.candidats) ? rep.candidats : [],\n    contactSourcesConsultees: Array.isArray(rep.sourcesConsultees) ? rep.sourcesConsultees : [],\n  },\n  binary: bin,\n}];"
+      },
+      "notes": "Rattache les pieces jointes (un noeud HTTP les perd) et tranche : la fiche fait foi si elle porte deja une adresse, sinon l'enrichissement comble le vide. Seules les confiances haute et moyenne sont envoyables ; en dessous l'adresse existe mais rien ne prouve qu'elle a un rapport avec le poste, donc depot manuel."
+    }
+  ],
+  "connections": {
+    "🔔 Webhook: decision de Lineo": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🕘 Cron relances": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config relances",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config": {
+      "main": [
+        [
+          {
+            "node": "🧩 Decision recue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Decision recue": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Lire la fiche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Lire la fiche": {
+      "main": [
+        [
+          {
+            "node": "🧩 Decision: contexte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Decision: contexte": {
+      "main": [
+        [
+          {
+            "node": "🔀 Aiguillage: decision",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🐘 Postgres: decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Aiguillage: decision": {
+      "main": [
+        [
+          {
+            "node": "📥 CV PDF de la branche",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🌐 career-ops: journal des offres",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🌐 career-ops: journal des offres",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🐙 GitHub: Supprimer la branche",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Alerte technique (Lineo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 CV PDF de la branche": {
+      "main": [
+        [
+          {
+            "node": "📥 Lettre DOCX de la branche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Lettre DOCX de la branche": {
+      "main": [
+        [
+          {
+            "node": "🧩 Joindre CV + lettre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Courriel recruteur connu ?": {
+      "main": [
+        [
+          {
+            "node": "📧 Send: Application Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Portail: tout pret a coller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Send: Application Output": {
+      "main": [
+        [
+          {
+            "node": "🧩 Preparer le tag archive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌐 career-ops: tracker Applied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Preparer le tag archive": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Tags archive existants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Tags archive existants": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Lire le HEAD de branche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Lire le HEAD de branche": {
+      "main": [
+        [
+          {
+            "node": "🧩 Construire le tag annote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Construire le tag annote": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Creer objet tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Creer objet tag": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Creer reference tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Creer reference tag": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Supprimer la branche",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🐘 Postgres: envoi + relance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Supprimer la branche": {
+      "main": [
+        [
+          {
+            "node": "📧 Confirmation de suppression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Portail: tout pret a coller": {
+      "main": [
+        [
+          {
+            "node": "🐘 Postgres: depot portail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: journal des offres": {
+      "main": [
+        [
+          {
+            "node": "🧩 Retouche: consigne",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Retouche: consigne": {
+      "main": [
+        [
+          {
+            "node": "🌐 Workflow 2: relancer la generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config relances": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: relances dues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: relances dues": {
+      "main": [
+        [
+          {
+            "node": "🧩 Relances: normaliser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Relances: normaliser": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle relances",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Boucle relances": {
+      "main": [
+        [
+          {
+            "node": "🧩 Relances: fin de tournee",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🐙 GitHub: Historique relance ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Historique relance ?": {
+      "main": [
+        [
+          {
+            "node": "🧩 Relance: decider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Relance: decider": {
+      "main": [
+        [
+          {
+            "node": "🔀 Relance: envoyable ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Relance: envoyable ?": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: brouillon de relance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔁 Boucle relances",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: brouillon de relance": {
+      "main": [
+        [
+          {
+            "node": "🧩 Relance: message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Relance: message": {
+      "main": [
+        [
+          {
+            "node": "🔀 Courriel recruteur connu ? (relance)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Courriel recruteur connu ? (relance)": {
+      "main": [
+        [
+          {
+            "node": "📧 Send: Relance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🧩 Relance: historique + sha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Relance: depot manuel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Send: Relance": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle relances",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Relance: historique + sha": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Ecrire l'historique relance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Relance: depot manuel": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle relances",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Joindre CV + lettre": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: chercher un contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: chercher un contact": {
+      "main": [
+        [
+          {
+            "node": "🧩 Contact retenu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Contact retenu": {
+      "main": [
+        [
+          {
+            "node": "🔀 Courriel recruteur connu ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "tags": []
+}

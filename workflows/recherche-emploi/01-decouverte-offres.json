@@ -1,0 +1,400 @@
+{
+  "name": "1. Decouverte des offres",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "recherche-emploi",
+        "options": {}
+      },
+      "id": "2d8c65db-0c60-4ce5-b8be-7851aa4dabdf",
+      "name": "🔔 Webhook: lancer la recherche",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        48
+      ],
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "careerOpsBase",
+              "value": "http://service.interne:3000",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "maxRetenues",
+              "value": 5,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cf4503bc-5345-4afa-ae9e-da76c5ab2858",
+      "name": "⚙️ Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        16,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "client_id",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "client_secret",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "scope",
+              "value": "api_offresdemploiv2 o2dsoffre"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "819fc72c-5326-41a9-94f2-19d87dbdfdea",
+      "name": "🔑 Jeton France Travail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        240,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "url": "http://service.interne:3000/api/search-plan",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "96b7456f-68fb-4839-8f65-365dbe34cb34",
+      "name": "🌐 career-ops: plan de recherche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        464,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Le plan vient de portals.yml via career-ops : aucun LLM, aucun mot-cle\n// invente ici. Une URL France Travail par requete, pour savoir laquelle a\n// ramene quoi.\nconst plan = $input.first().json ?? {};\nif (!Array.isArray(plan.urls) || plan.urls.length === 0) {\n  throw new Error(\n    'GET /api/search-plan n a rendu aucune URL. Reponse : ' + JSON.stringify(plan).slice(0, 300) +\n    ' - verifier le bloc france_travail de portals.yml et title_filter.positive.',\n  );\n}\nreturn plan.urls.map((url) => ({ json: { url } }));"
+      },
+      "id": "270c2e86-93a9-4a3b-8727-1f169e92e1f3",
+      "name": "🧾 URLs a interroger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "eb532f28-3ce7-4d61-9a96-cfbc454ebf3d",
+      "name": "🔁 Boucle URLs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        912,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "6865c900-9000-4b26-8c5c-2595487eac6d",
+      "name": "🕘 Cron 9h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -208,
+        240
+      ],
+      "notes": "Tournee automatique en semaine. Le bouton de l'app declenche la meme chaine par le webhook."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c674062c-7115-4eda-99c0-17437fddf59c",
+      "name": "🌐 France Travail: offres",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1136,
+        0
+      ],
+      "notes": "neverError : une URL qui ne ramene rien ou echoue ne doit pas tuer la tournee. Les autres requetes continuent, et /api/rank triera ce qui est arrive."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sortie « done » de la boucle : elle porte toutes les reponses France Travail\n// accumulees (une par URL interrogee).\n//\n// On aplatit seulement. La deduplication et le plafonnement du lot sont faits\n// cote career-ops par /api/rank : c'est la que 14 tests les couvrent, et une\n// seconde implementation ici serait une deuxieme source de verite.\nconst offres = [];\nlet reponses = 0;\nfor (const item of $input.all()) {\n  const r = item.json ?? {};\n  reponses += 1;\n  if (Array.isArray(r.resultats)) offres.push(...r.resultats);\n}\n\n// Zero offre n'est PAS une erreur : France Travail peut ne rien avoir ce\n// jour-la. On le laisse passer, /api/rank repondra une liste vide explicite.\nreturn [{ json: { offres, nbBrut: offres.length, reponses } }];"
+      },
+      "id": "51717d9d-ab1b-4395-afed-e9b924314f22",
+      "name": "📦 Agreger les offres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        192
+      ],
+      "notes": "Sortie « done » de la boucle : elle porte toutes les reponses France Travail accumulees. La deduplication et le plafonnement sont faits cote career-ops par /api/rank, qui est teste pour ca."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://service.interne:3000/api/rank",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ offres: $json.offres, max: $('⚙️ Config').first().json.maxRetenues }) }}",
+        "options": {
+          "timeout": 290000
+        }
+      },
+      "id": "31c7b98b-f7c7-490d-9eaa-a63b12466acf",
+      "name": "🌐 career-ops: tri des offres",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1360,
+        192
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "notes": "POST /api/rank : le SEUL appel LLM de ce workflow, et il est chez career-ops. Les criteres viennent de portals.yml, pas d'un prompt ecrit ici. timeout 290 s : le tri peut porter jusqu'a 60 offres."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://service.interne:3000/api/offers",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ jobs: $json.jobs, lot: $json.lot, inventes: $json.inventes, source: 'n8n/decouverte', executionId: $execution.id }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "545fe757-fb34-4723-8739-c4bf1ca2285f",
+      "name": "🌐 career-ops: enregistrer les offres",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1584,
+        192
+      ],
+      "notes": "POST /api/offers : career-ops stocke les offres retenues, et la page les affiche pour que Lineo valide celles qui l'interessent. C'est cette validation qui declenchera le workflow 2 (generation lettre + CV)."
+    }
+  ],
+  "connections": {
+    "🔔 Webhook: lancer la recherche": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config": {
+      "main": [
+        [
+          {
+            "node": "🔑 Jeton France Travail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔑 Jeton France Travail": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: plan de recherche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: plan de recherche": {
+      "main": [
+        [
+          {
+            "node": "🧾 URLs a interroger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧾 URLs a interroger": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🕘 Cron 9h": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Boucle URLs": {
+      "main": [
+        [
+          {
+            "node": "📦 Agreger les offres",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🌐 France Travail: offres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 France Travail: offres": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Agreger les offres": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: tri des offres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: tri des offres": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: enregistrer les offres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

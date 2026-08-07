@@ -1,0 +1,85 @@
+{
+  "name": "Motion Designer — Rétention",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "id": "554e7188-fdfe-4a1f-bb88-2eab25be497a",
+      "name": "Daily retention schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://service.interne:3000/api/internal/cleanup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "d550d249-b5a5-4ae9-a286-d8b704805169",
+      "name": "Trigger retention cleanup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        480,
+        144
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Motion Designer — Rétention\n\nTous les jours à 04:00 (heure creuse, hors fenêtres des workflows métier acme) : POST /api/internal/cleanup sur la webapp — expire les jobs > 7 jours (les artefacts disque partent, la ligne d'historique reste, badge « Expiré »).\n\nJeton : credential « Motion Designer INTERNAL_API_TOKEN » (x-internal-token), le même que le workflow Dispatch.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "09eb6010-70a4-4df7-af5e-4c754251eb4a",
+      "name": "Sticky Note 5f9275a9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -128
+      ]
+    }
+  ],
+  "connections": {
+    "Daily retention schedule": {
+      "main": [
+        [
+          {
+            "node": "Trigger retention cleanup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

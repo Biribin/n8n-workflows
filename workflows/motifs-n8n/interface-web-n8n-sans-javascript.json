@@ -1,0 +1,299 @@
+{
+  "name": "Absences App - Interface v3 (No JS)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook UI v3",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        260,
+        300
+      ],
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "GET",
+          "POST"
+        ],
+        "path": "absences-ui-v3",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "2",
+      "name": "Render HTML serveur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const s = $getWorkflowStaticData('global');\nif (!Array.isArray(s.absences)) s.absences = [];\nfor (const row of s.absences) {\n  if (!row.id) row.id = row.cree_le || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;\n}\n\nconst totals = {};\nfor (const row of s.absences) {\n  const key = String(row.nom || '').trim();\n  if (!key) continue;\n  totals[key] = (totals[key] || 0) + 1;\n}\n\nconst summaryRows = Object.entries(totals)\n  .map(([nom, total]) => ({ nom, total }))\n  .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));\n\nconst esc = (v) => String(v || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\"', '&quot;');\n\nconst rowsSummaryHtml = summaryRows.length\n  ? summaryRows.map((r) => `<tr><td>${esc(r.nom)}</td><td>${r.total}</td></tr>`).join('')\n  : '<tr><td colspan=\"2\">Aucune absence pour le moment</td></tr>';\n\nconst rowsDetailsHtml = s.absences.length\n  ? s.absences\n      .slice()\n      .reverse()\n      .map((r) => `<tr><td>${esc(r.nom)}</td><td>${esc(r.date_absence)}</td><td>${esc(r.motif)}</td><td>${esc(r.plan_action || '-')}</td><td>${esc(r.statut_action || '-')}</td><td><form method=\"POST\" action=\"/webhook/absences-ui-v3\" style=\"margin:0\"><input type=\"hidden\" name=\"action\" value=\"delete_one\"><input type=\"hidden\" name=\"id\" value=\"${esc(r.id)}\"><button type=\"submit\" class=\"danger\">Supprimer</button></form></td></tr>`)\n      .join('')\n  : '<tr><td colspan=\"6\">Aucune absence enregistree</td></tr>';\n\nconst flash = s.flash && s.flash.text ? s.flash : null;\nif (s.flash) delete s.flash;\n\nconst flashHtml = flash\n  ? `<div class=\"msg ${flash.isError ? 'err' : 'ok'}\">${esc(flash.text)}</div>`\n  : '';\n\nconst html = `<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>App Absences</title><style>:root{--bg:#f5f7fb;--card:#fff;--txt:#1f2937;--muted:#6b7280;--primary:#2563eb;--ok:#16a34a;--border:#e5e7eb;--danger:#dc2626}*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--txt)}.wrap{max-width:1100px;margin:24px auto;padding:0 16px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,.04)}h1{font-size:26px;margin:0 0 8px}p{margin:0 0 14px;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}input,button{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);font-size:14px}button{cursor:pointer;background:var(--primary);color:#fff;border:none;font-weight:600}.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:#111827;color:#fff;border-radius:10px;padding:11px 12px;font-size:14px;font-weight:600}.danger{background:var(--danger)}.msg{margin-top:10px;font-size:14px}.ok{color:var(--ok)}.err{color:#dc2626}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}th{background:#f9fafb;font-size:13px}.small{font-size:12px;color:var(--muted)}@media (max-width:720px){.grid{grid-template-columns:1fr}}</style></head><body><div class=\"wrap\"><div class=\"card\"><h1>Tableau d'absences</h1><p>Ajoute, consulte et supprime des absences.</p><form method=\"POST\" action=\"/webhook/absences-ui-v3\"><input type=\"hidden\" name=\"action\" value=\"add\"><div class=\"grid\"><input name=\"nom\" placeholder=\"Nom (ex: Dupont)\" required><input name=\"date_absence\" type=\"date\" required><input name=\"motif\" placeholder=\"Motif (optionnel)\"></div><div class=\"grid\" style=\"margin-top:10px\"><select name=\"plan_action\"><option value=\"\">Plan d'action (aucun)</option><option>Avertissement</option><option>Entretien</option><option>Formation</option><option>Suspension</option><option>Autre</option></select><select name=\"statut_action\"><option>A faire</option><option>En cours</option><option>Traite</option></select><div></div></div><div style=\"margin-top:10px;display:flex;gap:10px\"><button type=\"submit\">Ajouter l'absence</button><a class=\"btn\" href=\"/webhook/absences-ui-v3-report\">Tableau pro interactif</a></div></form>${flashHtml}</div><div class=\"card\"><h2 style=\"margin-top:0\">Totaux par nom</h2><table><thead><tr><th>Nom</th><th>Total absences</th></tr></thead><tbody>${rowsSummaryHtml}</tbody></table></div><div class=\"card\"><h2 style=\"margin-top:0\">Liste des absences</h2><table><thead><tr><th>Nom</th><th>Date</th><th>Motif</th><th>Plan d'action</th><th>Statut</th><th>Action</th></tr></thead><tbody>${rowsDetailsHtml}</tbody></table><p class=\"small\">Astuce: utilise \\\"Supprimer\\\" sur la ligne concernee.</p></div></div></body></html>`;\n\nreturn [{ json: { html } }];"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Retour HTML v3",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        300
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.html}}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "b42bcfa1-467f-423f-a601-da4002041bf6",
+      "name": "Traiter Actions POST",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        520
+      ],
+      "parameters": {
+        "jsCode": "const input = $json || {};\nconst body = input.body || {};\nconst action = String(body.action || '').toLowerCase();\n\nconst s = $getWorkflowStaticData('global');\nif (!Array.isArray(s.absences)) s.absences = [];\nfor (const row of s.absences) {\n  if (!row.id) row.id = row.cree_le || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;\n}\n\nlet flash = '';\nlet isError = false;\n\nif (action === 'add') {\n  const nom = String(body.nom || '').trim();\n  const date_absence = String(body.date_absence || '').trim();\n  const motif = String(body.motif || '').trim();\n  const plan_action = String(body.plan_action || '').trim();\n  const statut_action = String(body.statut_action || 'A faire').trim();\n\n  if (!nom || !date_absence) {\n    flash = 'Merci de remplir le nom et la date.';\n    isError = true;\n  } else {\n    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;\n    s.absences.push({ id, nom, date_absence, motif, plan_action, statut_action, cree_le: new Date().toISOString() });\n    const totalNom = s.absences.filter((r) => r.nom === nom).length;\n    flash = `Absence ajoutee pour ${nom}. Total pour ce nom: ${totalNom}`;\n  }\n}\n\nif (action === 'delete_one') {\n  const id = String(body.id || '').trim();\n  const before = s.absences.length;\n  s.absences = s.absences.filter((r) => String(r.id || '') !== id);\n  if (s.absences.length < before) {\n    flash = 'Absence supprimee.';\n  } else {\n    flash = 'Absence introuvable.';\n    isError = true;\n  }\n}\n\nif (action === 'delete_by_name') {\n  const nom = String(body.nom || '').trim();\n  if (!nom) {\n    flash = 'Merci de saisir un nom a supprimer.';\n    isError = true;\n  } else {\n    const before = s.absences.length;\n    s.absences = s.absences.filter((r) => String(r.nom || '').trim() !== nom);\n    const deleted = before - s.absences.length;\n    if (deleted > 0) {\n      flash = `${deleted} absence(s) supprimee(s) pour ${nom}.`;\n    } else {\n      flash = `Aucune absence trouvee pour ${nom}.`;\n      isError = true;\n    }\n  }\n}\n\nif (action === 'cleanup_tests') {\n  const before = s.absences.length;\n  s.absences = s.absences.filter((r) => !['Test User', 'PRENOM'].includes(String(r.nom || '').trim()));\n  const deleted = before - s.absences.length;\n  flash = `${deleted} ligne(s) de test supprimee(s).`;\n}\n\ns.flash = { text: flash, isError };\nreturn [{ json: { ok: true } }];"
+      }
+    },
+    {
+      "id": "dbe57174-3c16-45ad-8ae6-2e5b68892f4d",
+      "name": "Rediriger vers GET",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        520
+      ],
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectURL": "n8n.exemple.internal/webhook/absences-ui-v3",
+        "options": {
+          "responseCode": 303
+        }
+      }
+    },
+    {
+      "id": "a396d7d5-1692-41d8-9ce2-a410f0fd0ebc",
+      "name": "Webhook Export CSV",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        260,
+        700
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "absences-ui-v3-export",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "c51d3bfd-25d5-410a-93ac-220880fc9a2d",
+      "name": "Generer Export Jolie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        700
+      ],
+      "parameters": {
+        "jsCode": "const s = $getWorkflowStaticData('global');\nconst rows = Array.isArray(s.absences) ? s.absences.slice() : [];\n\nconst esc = (v) => String(v ?? '')\n  .replaceAll('&', '&amp;')\n  .replaceAll('<', '&lt;')\n  .replaceAll('>', '&gt;')\n  .replaceAll('\"', '&quot;');\n\nconst byName = {};\nfor (const r of rows) {\n  const nom = String(r.nom || '').trim() || 'Sans nom';\n  byName[nom] = (byName[nom] || 0) + 1;\n}\n\nconst summaryRows = Object.entries(byName)\n  .map(([nom, total]) => ({ nom, total }))\n  .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));\n\nconst totalAbsences = rows.length;\nconst totalPersonnes = summaryRows.length;\nconst exportDate = new Date().toLocaleString('fr-FR');\n\nconst detailsHtml = rows.length\n  ? rows\n      .slice()\n      .reverse()\n      .map((r, idx) => `<tr><td class=\"c\">${idx + 1}</td><td>${esc(r.nom)}</td><td class=\"c\">${esc(r.date_absence)}</td><td>${esc(r.motif)}</td><td class=\"c\">${esc(r.cree_le)}</td></tr>`)\n      .join('')\n  : '<tr><td colspan=\"5\" class=\"empty\">Aucune absence</td></tr>';\n\nconst summaryHtml = summaryRows.length\n  ? summaryRows.map((r) => `<tr><td>${esc(r.nom)}</td><td class=\"c strong\">${r.total}</td></tr>`).join('')\n  : '<tr><td colspan=\"2\" class=\"empty\">Aucune donnee</td></tr>';\n\nconst html = `<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Export Absences</title>\n<style>\n  body { font-family: Segoe UI, Arial, sans-serif; background:#f4f7fb; margin:24px; color:#10233c; }\n  .wrap { max-width: 1280px; margin:0 auto; }\n  .title { font-size:28px; font-weight:800; margin:0 0 6px; }\n  .sub { color:#4b5f7a; margin:0 0 18px; }\n  .cards { display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; margin-bottom:20px; }\n  .card { background:#fff; border:1px solid #dfe7f3; border-radius:12px; padding:14px 16px; }\n  .card .k { font-size:13px; color:#5d6f88; }\n  .card .v { font-size:28px; font-weight:800; color:#0b4f8a; margin-top:6px; }\n  h2 { margin:20px 0 10px; font-size:20px; }\n  table { width:100%; border-collapse:separate; border-spacing:0; background:#fff; border:1px solid #dfe7f3; border-radius:12px; overflow:hidden; }\n  th { background:linear-gradient(180deg,#0f62a8,#0b4f8a); color:#fff; text-align:left; padding:12px 14px; font-size:14px; }\n  td { padding:12px 14px; border-top:1px solid #eef3fa; font-size:14px; }\n  tr:nth-child(even) td { background:#f9fcff; }\n  .c { text-align:center; }\n  .strong { font-weight:700; }\n  .empty { text-align:center; color:#6c7f98; padding:20px; }\n</style>\n</head>\n<body>\n  <div class=\"wrap\">\n    <h1 class=\"title\">Tableau des absences - Export visuel</h1>\n    <p class=\"sub\">Export du ${esc(exportDate)} (donnees synchronisees avec l'app)</p>\n\n    <div class=\"cards\">\n      <div class=\"card\"><div class=\"k\">Total absences</div><div class=\"v\">${totalAbsences}</div></div>\n      <div class=\"card\"><div class=\"k\">Personnes concernees</div><div class=\"v\">${totalPersonnes}</div></div>\n      <div class=\"card\"><div class=\"k\">Dernier export</div><div class=\"v\" style=\"font-size:18px\">${esc(exportDate)}</div></div>\n    </div>\n\n    <h2>Resume par nom</h2>\n    <table>\n      <thead><tr><th>Nom</th><th class=\"c\">Total absences</th></tr></thead>\n      <tbody>${summaryHtml}</tbody>\n    </table>\n\n    <h2>Details des absences</h2>\n    <table>\n      <thead><tr><th class=\"c\">#</th><th>Nom</th><th class=\"c\">Date absence</th><th>Motif</th><th class=\"c\">Cree le</th></tr></thead>\n      <tbody>${detailsHtml}</tbody>\n    </table>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];"
+      }
+    },
+    {
+      "id": "548021b3-0bfe-4e94-8567-7dc54dd8c44f",
+      "name": "Retour Export Jolie",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        700
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.html}}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/vnd.ms-excel; charset=utf-8"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "attachment; filename=\"tableau-absences.xls\""
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "20ed5141-9076-492c-a62e-b1d853af70c2",
+      "name": "Webhook Rapport Interactif",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        260,
+        880
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "absences-ui-v3-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "b6fe2da5-cca2-4a75-a5be-dbf0520f63e1",
+      "name": "Generer Rapport Interactif",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        880
+      ],
+      "parameters": {
+        "jsCode": "const s = $getWorkflowStaticData('global');\nconst rows = Array.isArray(s.absences) ? s.absences.slice() : [];\n\nconst safeRows = rows.map((r, i) => ({\n  idx: i + 1,\n  nom: String(r.nom || ''),\n  date_absence: String(r.date_absence || ''),\n  motif: String(r.motif || ''),\n  plan_action: String(r.plan_action || ''),\n  statut_action: String(r.statut_action || ''),\n  cree_le: String(r.cree_le || ''),\n}));\n\nconst jsonRows = JSON.stringify(safeRows)\n  .replaceAll('<', '\\\\u003c')\n  .replaceAll('>', '\\\\u003e')\n  .replaceAll('&', '\\\\u0026');\n\nconst html = `<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Rapport interactif absences</title>\n<style>\n  :root { --bg:#f2f6fb; --card:#fff; --line:#dbe5f1; --text:#1a2b44; --muted:#60738f; --primary:#0b5cab; }\n  *{box-sizing:border-box}\n  body{margin:0;background:var(--bg);font-family:Segoe UI,Arial,sans-serif;color:var(--text)}\n  .wrap{max-width:1320px;margin:24px auto;padding:0 16px}\n  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 3px 12px rgba(0,0,0,.05)}\n  h1{margin:0 0 6px;font-size:30px}\n  .sub{color:var(--muted);margin:0}\n  .filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr auto;gap:10px;align-items:end}\n  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}\n  input,select,button{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px}\n  button{cursor:pointer;background:var(--primary);border:none;color:#fff;font-weight:700}\n  .btn-secondary{background:#334155}\n  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}\n  .stat{background:#f8fbff;border:1px solid var(--line);border-radius:10px;padding:10px}\n  .k{font-size:12px;color:var(--muted)} .v{font-size:24px;font-weight:800}\n  table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}\n  th{background:linear-gradient(180deg,#0b67bb,#0b5cab);color:#fff;padding:12px;text-align:left;font-size:13px;cursor:pointer;user-select:none;white-space:nowrap}\n  td{padding:11px;border-top:1px solid #edf2f8;background:#fff;font-size:14px}\n  tr:nth-child(even) td{background:#f9fcff}\n  .c{text-align:center}\n  .empty{padding:18px;text-align:center;color:var(--muted)}\n  .hint{font-size:12px;color:var(--muted);margin-top:8px}\n  @media (max-width:1100px){.filters{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr 1fr}}\n</style>\n</head>\n<body>\n<div class=\"wrap\">\n  <div class=\"card\">\n    <h1>Rapport interactif des absences</h1>\n    <p class=\"sub\">Tri, filtre et recherche en direct (ordre alphabetique, date, creation/horaire)</p>\n  </div>\n\n  <div class=\"card\">\n    <div class=\"filters\">\n      <div><label>Recherche</label><input id=\"q\" placeholder=\"Nom, motif, plan d'action...\"></div>\n      <div><label>Periode</label><select id=\"period\"><option value=\"global\">Global</option><option value=\"week_current\">Semaine en cours</option><option value=\"week_prev\">Semaine precedente</option><option value=\"month_current\">Mois en cours</option></select></div>\n      <div><label>Nom</label><select id=\"nomFilter\"><option value=\"\">Tous</option></select></div>\n      <div><label>Plan d'action</label><select id=\"planFilter\"><option value=\"\">Tous</option><option>Avertissement</option><option>Entretien</option><option>Formation</option><option>Suspension</option><option>Autre</option></select></div>\n      <div><label>Date du</label><input id=\"dateFrom\" type=\"date\"></div>\n      <div><label>Date au</label><input id=\"dateTo\" type=\"date\"></div>\n      <div><label>Trier par</label><select id=\"sortBy\"><option value=\"nom_asc\">Nom A→Z</option><option value=\"nom_desc\">Nom Z→A</option><option value=\"date_asc\">Date ancienne→recente</option><option value=\"date_desc\">Date recente→ancienne</option><option value=\"created_desc\">Creation recente→ancienne</option><option value=\"created_asc\">Creation ancienne→recente</option></select></div>\n      <div><button id=\"resetBtn\" class=\"btn-secondary\">Reinitialiser</button></div>\n    </div>\n    <p class=\"hint\">Astuce: clique sur les titres de colonnes pour trier rapidement.</p>\n  </div>\n\n  <div class=\"card\">\n    <div class=\"stats\">\n      <div class=\"stat\"><div class=\"k\">Absences affichees</div><div class=\"v\" id=\"s1\">0</div></div>\n      <div class=\"stat\"><div class=\"k\">Total absences (global)</div><div class=\"v\" id=\"s2\">0</div></div>\n      <div class=\"stat\"><div class=\"k\">Personnes distinctes</div><div class=\"v\" id=\"s3\">0</div></div>\n      <div class=\"stat\"><div class=\"k\">Derniere mise a jour</div><div class=\"v\" id=\"s4\" style=\"font-size:16px\"></div></div>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <table>\n      <thead>\n        <tr>\n          <th class=\"c\" data-key=\"idx\">#</th>\n          <th data-key=\"nom\">Nom</th>\n          <th class=\"c\" data-key=\"date_absence\">Date absence</th>\n          <th data-key=\"motif\">Motif</th>\n          <th data-key=\"plan_action\">Plan d'action</th>\n          <th data-key=\"statut_action\">Statut</th>\n          <th class=\"c\" data-key=\"cree_le\">Cree le (horaire)</th>\n        </tr>\n      </thead>\n      <tbody id=\"tbody\"></tbody>\n    </table>\n  </div>\n</div>\n\n<script>\nconst ALL = ${jsonRows};\nlet clickableSort = null;\n\nfunction fmtDate(v){ if(!v) return ''; const d = new Date(v); return isNaN(d) ? v : d.toLocaleDateString('fr-FR'); }\nfunction fmtDateTime(v){ if(!v) return ''; const d = new Date(v); return isNaN(d) ? v : d.toLocaleString('fr-FR'); }\nfunction normalize(v){ return String(v||'').toLowerCase().trim(); }\nfunction toNumDate(v){ const d = new Date(v); return isNaN(d) ? 0 : d.getTime(); }\nfunction esc(v){ return String(v||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }\n\nfunction getPeriodRange(period){\n  const now = new Date();\n  const y = now.getFullYear();\n  const m = now.getMonth();\n  const day = now.getDay();\n  const mondayOffset = day === 0 ? -6 : 1 - day;\n  const weekStart = new Date(now);\n  weekStart.setHours(0,0,0,0);\n  weekStart.setDate(now.getDate() + mondayOffset);\n\n  if (period === 'week_current') {\n    const start = new Date(weekStart);\n    const end = new Date(weekStart); end.setDate(end.getDate() + 6);\n    return { start, end };\n  }\n  if (period === 'week_prev') {\n    const start = new Date(weekStart); start.setDate(start.getDate() - 7);\n    const end = new Date(weekStart); end.setDate(end.getDate() - 1);\n    return { start, end };\n  }\n  if (period === 'month_current') {\n    const start = new Date(y, m, 1);\n    const end = new Date(y, m + 1, 0);\n    return { start, end };\n  }\n  return null;\n}\n\nfunction inRange(dateStr, range){\n  if (!range) return true;\n  if (!dateStr) return false;\n  const d = new Date(dateStr + 'T00:00:00');\n  if (isNaN(d)) return false;\n  const start = new Date(range.start); start.setHours(0,0,0,0);\n  const end = new Date(range.end); end.setHours(23,59,59,999);\n  return d >= start && d <= end;\n}\n\nfunction apply(){\n  const q = normalize(document.getElementById('q').value);\n  const period = document.getElementById('period').value;\n  const nomFilter = document.getElementById('nomFilter').value;\n  const df = document.getElementById('dateFrom').value;\n  const dt = document.getElementById('dateTo').value;\n  const sortBy = clickableSort || document.getElementById('sortBy').value;\n\n  const periodRange = getPeriodRange(period);\n\n  let rows = ALL.filter(r => {\n    const txt = normalize(r.nom + ' ' + r.motif + ' ' + r.plan_action + ' ' + r.statut_action + ' ' + r.date_absence + ' ' + r.cree_le);\n    if (q && !txt.includes(q)) return false;\n    if (nomFilter && r.nom !== nomFilter) return false;\n    const planFilter = document.getElementById('planFilter').value;\n    if (planFilter && r.plan_action !== planFilter) return false;\n    if (!inRange(r.date_absence, periodRange)) return false;\n    if (df && String(r.date_absence || '') < df) return false;\n    if (dt && String(r.date_absence || '') > dt) return false;\n    return true;\n  });\n\n  rows.sort((a,b)=>{\n    switch(sortBy){\n      case 'nom_desc': return b.nom.localeCompare(a.nom,'fr');\n      case 'date_asc': return String(a.date_absence).localeCompare(String(b.date_absence));\n      case 'date_desc': return String(b.date_absence).localeCompare(String(a.date_absence));\n      case 'created_asc': return toNumDate(a.cree_le)-toNumDate(b.cree_le);\n      case 'created_desc': return toNumDate(b.cree_le)-toNumDate(a.cree_le);\n      case 'idx': return a.idx-b.idx;\n      case 'nom': return a.nom.localeCompare(b.nom,'fr');\n      case 'date_absence': return String(a.date_absence).localeCompare(String(b.date_absence));\n      case 'motif': return String(a.motif).localeCompare(String(b.motif),'fr');\n      case 'plan_action': return String(a.plan_action).localeCompare(String(b.plan_action),'fr');\n      case 'statut_action': return String(a.statut_action).localeCompare(String(b.statut_action),'fr');\n      case 'cree_le': return toNumDate(a.cree_le)-toNumDate(b.cree_le);\n      default: return a.nom.localeCompare(b.nom,'fr');\n    }\n  });\n\n  const tbody = document.getElementById('tbody');\n  if (!rows.length){\n    tbody.innerHTML = '<tr><td colspan=\"7\" class=\"empty\">Aucune ligne correspondante</td></tr>';\n  } else {\n    tbody.innerHTML = rows.map(function(r){ return '<tr><td class=\"c\">'+r.idx+'</td><td>'+esc(r.nom)+'</td><td class=\"c\">'+esc(fmtDate(r.date_absence))+'</td><td>'+esc(r.motif)+'</td><td>'+esc(r.plan_action || '-')+'</td><td>'+esc(r.statut_action || '-')+'</td><td class=\"c\">'+esc(fmtDateTime(r.cree_le))+'</td></tr>'; }).join('');\n  }\n\n  document.getElementById('s1').textContent = rows.length;\n  document.getElementById('s2').textContent = ALL.length;\n  document.getElementById('s3').textContent = new Set(rows.map(r=>r.nom).filter(Boolean)).size;\n  document.getElementById('s4').textContent = new Date().toLocaleString('fr-FR');\n}\n\nfunction init(){\n  const names = [...new Set(ALL.map(r=>r.nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));\n  const sel = document.getElementById('nomFilter');\n  sel.innerHTML = '<option value=\"\">Tous</option>' + names.map(function(n){ return '<option value=\"'+n.replaceAll('\"','&quot;')+'\">'+esc(n)+'</option>'; }).join('');\n\n  ['q','period','nomFilter','planFilter','dateFrom','dateTo','sortBy'].forEach(id => {\n    document.getElementById(id).addEventListener('input', function(){ clickableSort = null; apply(); });\n  });\n\n  document.getElementById('resetBtn').addEventListener('click', function(){\n    document.getElementById('q').value='';\n    document.getElementById('period').value='global';\n    document.getElementById('nomFilter').value='';\n    document.getElementById('planFilter').value='';\n    document.getElementById('dateFrom').value='';\n    document.getElementById('dateTo').value='';\n    document.getElementById('sortBy').value='nom_asc';\n    clickableSort = null;\n    apply();\n  });\n\n  document.querySelectorAll('th[data-key]').forEach(function(th){\n    th.addEventListener('click', function(){\n      clickableSort = th.getAttribute('data-key');\n      apply();\n    });\n  });\n\n  apply();\n}\n\ninit();\n</script>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];"
+      }
+    },
+    {
+      "id": "ee5ec6dc-6186-459a-a919-0f01ac39a1c5",
+      "name": "Retour Rapport Interactif",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        880
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.html}}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook UI v3": {
+      "main": [
+        [
+          {
+            "node": "Render HTML serveur",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Traiter Actions POST",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render HTML serveur": {
+      "main": [
+        [
+          {
+            "node": "Retour HTML v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Traiter Actions POST": {
+      "main": [
+        [
+          {
+            "node": "Rediriger vers GET",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Export CSV": {
+      "main": [
+        [
+          {
+            "node": "Generer Export Jolie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generer Export Jolie": {
+      "main": [
+        [
+          {
+            "node": "Retour Export Jolie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Rapport Interactif": {
+      "main": [
+        [
+          {
+            "node": "Generer Rapport Interactif",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generer Rapport Interactif": {
+      "main": [
+        [
+          {
+            "node": "Retour Rapport Interactif",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

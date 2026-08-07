@@ -1,0 +1,176 @@
+{
+  "name": "acme — Purge mensuelle (journaux au-delà de la rétention RGPD)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 4 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "9a5b9f8b-9966-4b76-a281-8ab0d9bd25a8",
+      "name": "Cron — le 1er du mois 04h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -576,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/cron/purge?scope=monthly",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "0379c618-c285-403d-9b2c-48d05bb6fabf",
+      "name": "POST purge?scope=monthly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -336,
+        32
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "51faa6f9-995e-495f-894b-285fe9c0084d",
+      "name": "Succès ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// OK — purge mensuelle des journaux. Le body porte le détail :\n// authLog / adminAuditLog = { deleted:N } | { skipped:'table_absente' } | { error:... }\n// NB : { deleted:0 } est NORMAL tant qu'aucune ligne n'a dépassé la rétention\n// (12 mois AuthLog / 36 mois AdminAuditLog). Ce n'est pas une anomalie.\nconst r = $json;\nreturn [{ json: {\n  statut: 'OK',\n  scope: r.scope,\n  totalDeleted: r.totalDeleted,\n  cutoffs: r.cutoffs,\n  authLog: r.authLog,\n  adminAuditLog: r.adminAuditLog\n} }];"
+      },
+      "id": "a4f535f3-bd2a-47d4-a4d3-60cf2b9f6a78",
+      "name": "Log succès",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ÉCHEC — ok:false (au moins une étape a jeté, détail dans le body) ou erreur HTTP.\n// (neverError:true → l'HTTP node ne jette pas ; on inspecte le body.)\n// Une étape 'skipped:table_absente' n'est PAS une erreur (ok reste true).\nthrow new Error('Purge mensuelle ÉCHOUÉE : ' + JSON.stringify($json));"
+      },
+      "id": "2298782b-47f9-4e5a-93e9-f34122e22b13",
+      "name": "Alerte échec",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        144
+      ]
+    }
+  ],
+  "connections": {
+    "Cron — le 1er du mois 04h30": {
+      "main": [
+        [
+          {
+            "node": "POST purge?scope=monthly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST purge?scope=monthly": {
+      "main": [
+        [
+          {
+            "node": "Succès ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Succès ?": {
+      "main": [
+        [
+          {
+            "node": "Log succès",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alerte échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

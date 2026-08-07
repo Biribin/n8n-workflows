@@ -1,0 +1,582 @@
+{
+  "name": "WhatsApp Doc Classifier → OneDrive (garde pour l'instant pas finie)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": {
+          "config": {
+            "name": "⚙️ Configuration",
+            "parameters": {
+              "content": "## WhatsApp Doc Classifier → OneDrive\n\n**Pré-requis :**\n1. Meta Cloud API : créer un permanent token et configurer le webhook vers `/webhook/whatsapp-docs`\n2. Créer le credential \"WhatsApp Token\" (Bearer Auth) dans n8n\n3. Créer le dossier racine \"WhatsApp Docs\" sur OneDrive\n4. Le dossier de catégorie est créé automatiquement\n5. Installer OneDrive Desktop sur le PC pour sync auto\n\n**Catégories :** Formation, Badge, Contrats, Pieces_identite, Certificats, Autres"
+            },
+            "position": [
+              200,
+              -100
+            ],
+            "width": 450,
+            "height": 280
+          }
+        }
+      },
+      "id": "035ec04a-950e-4012-bf5c-49a4342167e6",
+      "name": "Sticky Note 82b399bc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-docs",
+        "options": {}
+      },
+      "id": "fa9f4d4a-322a-4824-b782-c0dcd0ac9964",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        304
+      ],
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body || $input.item.json;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0]?.value;\nconst msg = change?.messages?.[0];\n\nif (!msg || msg.type !== 'document') {\n  return { json: { is_document: false } };\n}\n\nconst doc = msg.document || {};\nconst contact = change?.contacts?.[0]?.profile?.name || msg.from;\n\nreturn {\n  json: {\n    is_document: true,\n    media_id: doc.id,\n    filename: doc.filename || 'document_' + Date.now(),\n    mime_type: doc.mime_type || 'application/octet-stream',\n    sender_phone: msg.from,\n    sender_name: contact,\n    caption: doc.caption || msg.text?.body || '',\n    phone_number_id: change?.metadata?.phone_number_id || ''\n  }\n};"
+      },
+      "id": "b18bf9d4-a077-4a07-99d8-45db1cc4c195",
+      "name": "Parse WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_document }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "331eebbd-ade8-4fe2-b397-cba6a13e6e46"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "17ae08c8-b34c-4adb-abdf-6d9b3c5ec6fc",
+      "name": "Document ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        928,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.media_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {}
+      },
+      "id": "213f7b33-2761-4f83-ba45-a1ddff588df2",
+      "name": "Get Media URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1152,
+        208
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpBearerAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "04d533db-e15e-4784-aa02-b92d73e24a4b",
+      "name": "Download File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1360,
+        208
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpBearerAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const crypto = require('crypto');\nconst sd = $getWorkflowStaticData('global');\nif (!sd.fileHashes) sd.fileHashes = {};\n\nlet hash = 'no_binary';\ntry {\n  const buf = await this.helpers.getBinaryDataBuffer('data');\n  hash = crypto.createHash('md5').update(buf).digest('hex');\n} catch(e) {\n  hash = 'err_' + Date.now();\n}\n\nconst isDup = !!sd.fileHashes[hash];\nif (!isDup) {\n  sd.fileHashes[hash] = { \n    filename: $('Parse WhatsApp').item.json.filename,\n    date: new Date().toISOString()\n  };\n}\n\nreturn {\n  json: {\n    ...$('Parse WhatsApp').item.json,\n    file_hash: hash,\n    is_duplicate: isDup\n  },\n  binary: $input.item.binary\n};"
+      },
+      "id": "d2a3adf3-8bc9-48bf-ab1f-f12b51b0a054",
+      "name": "Hash + Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "50bba690-6ab4-4248-8fcb-23b5ba93773d",
+      "name": "Doublon ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1808,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classe ce document dans UNE seule catégorie. Réponds UNIQUEMENT avec le mot de la catégorie, rien d'autre.\n\nCatégories possibles : Formation, Badge, Contrats, Pieces_identite, Certificats, Autres\n\nNom du fichier : {{ $json.filename }}\nMessage associé : {{ $json.caption }}\nExpéditeur : {{ $json.sender_name }}",
+        "batching": {}
+      },
+      "id": "b05db347-1bd8-4e86-8f79-ed854864ade6",
+      "name": "Classifier IA",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1952,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-6",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {
+          "maxTokensToSample": 50,
+          "temperature": 0
+        }
+      },
+      "id": "e1f6902d-9654-419e-9cbd-95e53fb1c1cb",
+      "name": "Claude Haiku",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        2128,
+        304
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "A_RECONNECTER",
+          "name": "anthropicApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const valid = ['Formation', 'Badge', 'Contrats', 'Pieces_identite', 'Certificats', 'Autres'];\nlet cat = ($input.item.json.text || 'Autres').trim().replace(/[^a-zA-Z_àâéèêëïîôùûüç]/g, '');\n\nif (!valid.includes(cat)) {\n  const low = cat.toLowerCase();\n  const match = valid.find(c => low.includes(c.toLowerCase()));\n  cat = match || 'Autres';\n}\n\nconst prev = $('Hash + Dedup').item.json;\nreturn {\n  json: {\n    category: cat,\n    folder_path: 'WhatsApp Docs/' + cat,\n    filename: prev.filename,\n    sender_phone: prev.sender_phone,\n    sender_name: prev.sender_name,\n    file_hash: prev.file_hash,\n    mime_type: prev.mime_type\n  },\n  binary: $('Hash + Dedup').item.binary\n};"
+      },
+      "id": "1f374b4e-8e49-4d1c-a8d6-34ccbf3aab7a",
+      "name": "Build Path",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/drive/root/children",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"name\": \"WhatsApp Docs\", \"folder\": {}, \"@microsoft.graph.conflictBehavior\": \"fail\" }",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4d3a1837-361f-4dbb-a252-71f09da2afb2",
+      "name": "Create Root Folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2464,
+        112
+      ],
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOneDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.microsoft.com/v1.0/me/drive/root:/WhatsApp Docs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {}
+      },
+      "id": "fe8a1e12-e856-4476-ae49-6bc9c2d2480c",
+      "name": "Get Root ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2688,
+        112
+      ],
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOneDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.microsoft.com/v1.0/me/drive/items/{{ $json.id }}/children",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"name\": \"{{ $(\"Build Path\").item.json.category }}\", \"folder\": {}, \"@microsoft.graph.conflictBehavior\": \"fail\" }",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "2e6ccae9-921f-47a9-9c86-2b3f3d7a4235",
+      "name": "Create Subfolder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2912,
+        112
+      ],
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOneDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.microsoft.com/v1.0/me/drive/root:/WhatsApp Docs/{{ $(\"Build Path\").item.json.category }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {}
+      },
+      "id": "2032dba4-010a-42ee-b662-acb38656d449",
+      "name": "Get Subfolder ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3120,
+        112
+      ],
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOneDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $(\"Build Path\").item.json.filename }}",
+        "parentId": "={{ $json.id }}",
+        "binaryData": true
+      },
+      "id": "593e8881-fd7f-49a8-804e-887a3a59e015",
+      "name": "Upload OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        3344,
+        112
+      ],
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOneDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nif (!sd.actionLog) sd.actionLog = [];\n\nconst bp = $('Build Path').item.json;\nconst upload = $input.item.json;\n\nconst entry = {\n  date: new Date().toISOString(),\n  filename: bp.filename,\n  category: bp.category,\n  sender: bp.sender_name + ' (' + bp.sender_phone + ')',\n  hash: bp.file_hash,\n  onedrive_url: upload.webUrl || '',\n  status: 'OK'\n};\n\nsd.actionLog.push(entry);\nif (sd.actionLog.length > 500) sd.actionLog = sd.actionLog.slice(-500);\n\nreturn { json: entry };"
+      },
+      "id": "1a2dd2d0-af62-4b1b-862c-fb7e4a5ffd0a",
+      "name": "Log Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3568,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Document ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document ?": {
+      "main": [
+        [
+          {
+            "node": "Get Media URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Media URL": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Hash + Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash + Dedup": {
+      "main": [
+        [
+          {
+            "node": "Doublon ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Doublon ?": {
+      "main": [
+        [
+          {
+            "node": "Classifier IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifier IA": {
+      "main": [
+        [
+          {
+            "node": "Build Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Haiku": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classifier IA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Path": {
+      "main": [
+        [
+          {
+            "node": "Create Root Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Root Folder": {
+      "main": [
+        [
+          {
+            "node": "Get Root ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Root ID": {
+      "main": [
+        [
+          {
+            "node": "Create Subfolder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Subfolder": {
+      "main": [
+        [
+          {
+            "node": "Get Subfolder ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Subfolder ID": {
+      "main": [
+        [
+          {
+            "node": "Upload OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

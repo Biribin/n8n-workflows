@@ -1,0 +1,1523 @@
+{
+  "name": "2. Generation lettre + CV",
+  "active": false,
+  "nodes": [
+    {
+      "id": "67b6ab25-bf7a-4e3f-a533-2558452a577a",
+      "name": "🔔 Webhook: generer la candidature",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "candidature-generer",
+        "options": {}
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "d0885085-09d5-4857-b0e2-f57467aa0011",
+      "name": "⚙️ Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2176,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "careerOpsBase",
+              "value": "http://service.interne:3000",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "candidateName",
+              "value": "Linéo Biribin",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "candidateEmail",
+              "value": "prenom.nom@exemple.fr",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "candidatePhone",
+              "value": "06 00 00 00 00",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "targetLanguage",
+              "value": "fr",
+              "type": "string"
+            },
+            {
+              "id": "c6",
+              "name": "githubOwner",
+              "value": "Biribin",
+              "type": "string"
+            },
+            {
+              "id": "c7",
+              "name": "githubRepo",
+              "value": "cv",
+              "type": "string"
+            },
+            {
+              "id": "c8",
+              "name": "githubBaseBranch",
+              "value": "main",
+              "type": "string"
+            },
+            {
+              "id": "c9",
+              "name": "githubLocaleFilePath",
+              "value": "locales/fr.yml",
+              "type": "string"
+            },
+            {
+              "id": "c10",
+              "name": "githubLetterFilePath",
+              "value": "letters/current.yml",
+              "type": "string"
+            },
+            {
+              "id": "c11",
+              "name": "githubPdfPath",
+              "value": "dist/pdf/cv-fr-ats.pdf",
+              "type": "string"
+            },
+            {
+              "id": "c12",
+              "name": "githubLetterDocxPath",
+              "value": "dist/docx/lettre-fr.docx",
+              "type": "string"
+            },
+            {
+              "id": "c13",
+              "name": "githubActionWorkflowName",
+              "value": "Build and Commit PDFs",
+              "type": "string"
+            },
+            {
+              "id": "c14",
+              "name": "githubActionPollSeconds",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "c15",
+              "name": "githubActionMaxPollAttempts",
+              "value": 60,
+              "type": "number"
+            },
+            {
+              "id": "c16",
+              "name": "githubToken",
+              "value": "github_pat_REMPLACER",
+              "type": "string"
+            },
+            {
+              "id": "c17",
+              "name": "decisionWebhook",
+              "value": "n8n.exemple.internal/webhook/candidature-decision",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "506c3083-0d6d-4ce8-9fec-0192846410f1",
+      "name": "🧩 Contexte candidature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1952,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Normalisation de l'entree du webhook. Deux modes :\n//  - nouvelle  : Lineo valide une offre dans career-ops -> nouvelle branche cv/*\n//  - retouche  : le workflow 3 renvoie la meme candidature avec une consigne\n//                -> on REUTILISE la branche, sinon le round precedent est perdu\n//\n// Le declencheur est lu par son NOM, pas par $json : le predecesseur immediat\n// est le noeud Config, et $json y renverrait la configuration au lieu de l'offre.\nconst cfg = $('⚙️ Config').first().json;\nconst brut = $('🔔 Webhook: generer la candidature').first().json ?? {};\nconst recu = brut.body ?? brut;\n\nconst mode = String(recu.mode || 'nouvelle').trim().toLowerCase();\nconst retouche = mode === 'retouche';\n\nconst job = recu.job ?? recu.offre ?? {};\nconst slug = (v) => String(v || '')\n  .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '-')\n  .replace(/^-+|-+$/g, '').slice(0, 40);\n\nconst titre = String(job.title ?? job.poste ?? '').trim();\nconst entreprise = String(job.company ?? job.entreprise ?? '').trim();\nconst description = String(job.description ?? '').trim();\n\n// Sans intitule NI description, /api/letter refusera de toute facon : on echoue\n// ici, ou le message est lisible, plutot que dans un 400 au milieu de la chaine.\nif (!titre && !description) {\n  throw new Error('offre inexploitable : ni title ni description. Recu : ' + JSON.stringify(recu).slice(0, 300));\n}\n\n// France Travail rend souvent le lieu comme OBJET : sans coercition, l'app\n// afficherait « [object Object] ».\nconst lieuBrut = job.location ?? job.lieu;\nlet lieu = null;\nif (typeof lieuBrut === 'string') lieu = lieuBrut.trim() || null;\nelse if (lieuBrut && typeof lieuBrut === 'object') {\n  lieu = lieuBrut.libelle || lieuBrut.nom || lieuBrut.ville || lieuBrut.label || lieuBrut.name\n    || Object.values(lieuBrut).filter((v) => typeof v === 'string' && v.trim()).join(', ') || null;\n}\n\nconst jobId = String(job.jobId ?? job.id ?? '').trim();\nconst inboxId = retouche\n  ? String(recu.ficheId || '').trim()\n  : (slug(jobId) || slug(entreprise + '-' + titre) || 'sans-id');\nif (!inboxId) throw new Error('retouche sans ficheId : impossible de savoir quelle fiche mettre a jour');\n\n// La branche est la CLE NATURELLE de la candidature (contrainte UNIQUE en base).\n// En retouche elle vient de l'appelant ; sinon on la derive de l'execution.\nconst suffixe = String($execution.id || Date.now()).slice(-8);\nconst branchName = retouche\n  ? String(recu.branche || '').trim()\n  : 'cv/' + (slug(entreprise) || 'entreprise') + '-' + (slug(titre) || 'poste') + '-' + suffixe;\nif (!branchName) throw new Error('retouche sans branche : la candidature serait dupliquee sur une branche neuve');\n\nconst cible = String(recu.cible || '').trim().toLowerCase();\nconst consigne = String(recu.consigne || '').trim().slice(0, 600);\n\nreturn [{\n  json: {\n    mode, retouche, inboxId, branchName, jobId,\n    // La consigne ne part QUE vers la piece que Lineo a demande de retoucher :\n    // retoucher la lettre ne doit pas remuer le CV, et inversement.\n    consigneLettre: retouche && cible !== 'cv' ? consigne : '',\n    consigneCv: retouche && cible === 'cv' ? consigne : '',\n    cibleRetouche: cible,\n    offre: { title: titre, company: entreprise, location: lieu, url: String(job.url ?? job.url_offre ?? '').trim(), description, whyMatch: String(job.whyMatch ?? job.pourquoi_ca_matche ?? '').trim() },\n    courrielContact: String(job.contactEmail ?? job.courriel_contact ?? '').trim(),\n    score: job.score ?? null,\n    repository: cfg.githubOwner + '/' + cfg.githubRepo,\n    baseBranch: cfg.githubBaseBranch,\n    filePath: cfg.githubLocaleFilePath,\n    letterPath: cfg.githubLetterFilePath,\n    inboxPath: 'data-inbox/' + inboxId + '.json',\n    nowIso: new Date().toISOString(),\n    cleRun: (slug(entreprise) || 'entreprise') + '-' + (slug(titre) || 'poste') + '-' + suffixe,\n  },\n}];"
+      },
+      "notes": "UNE candidature par appel. Le workflow 1 stocke les offres, Lineo en valide une dans career-ops, ce webhook la recoit. Pas de boucle : un echec sur une offre n'emporte plus les autres. Sur une retouche, la branche existante est REUTILISEE (elle porte deja le CV et la lettre du round precedent)."
+    },
+    {
+      "id": "0c1e2c35-2d00-4471-b7bd-ac91ae156577",
+      "name": "🌐 career-ops: lettre",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1728,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Config').first().json.careerOpsBase }}/api/letter",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ offre: $json.offre, consigne: $json.consigneLettre }) }}",
+        "options": {
+          "timeout": 290000
+        }
+      },
+      "notes": "POST /api/letter : la redaction appartient a career-ops, pas a un prompt ecrit ici. La route refuse plutot que de rendre une lettre douteuse (vide, trop longue, anciennete inventee) — un 4xx/5xx ici DOIT arreter la chaine, c'est la seule piece que lit un recruteur.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "ef03abca-08b9-4957-b15f-67508b372d68",
+      "name": "🐙 GitHub: Base ref",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1504,
+        0
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/git/ref/heads/{{ $('⚙️ Config').first().json.githubBaseBranch }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "6abb49e6-5cbc-4211-b465-c30f454f1369",
+      "name": "🐙 GitHub: Branche existante ?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1280,
+        0
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/git/ref/heads/{{ $('🧩 Contexte candidature').first().json.branchName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "404 = la branche n'existe pas encore -> sortie erreur -> on la cree. Une retouche repasse ici et trouve SA branche : le round precedent est conserve.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a9cc4168-784b-449f-a0ee-5fce54bde77d",
+      "name": "🐙 GitHub: Creer la branche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1056,
+        192
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/git/refs",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ref\": \"refs/heads/{{ $('🧩 Contexte candidature').first().json.branchName }}\",\n  \"sha\": \"{{ $('🐙 GitHub: Base ref').first().json.object.sha }}\"\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "35bbb36f-5a2f-46b8-881b-560d41a81c92",
+      "name": "🐙 GitHub: Lire la lettre",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -832,
+        0
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubLetterFilePath }}?ref={{ $('🧩 Contexte candidature').first().json.branchName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "404 tolere : au tout premier passage le fichier peut ne pas exister sur la branche. Le constructeur ci-apres n'ajoute le sha que s'il en a recu un.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4b11e673-5165-4894-b3a1-67afb4af61ac",
+      "name": "🧩 Construire la lettre YAML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// letters/current.yml, le fichier que tools/build_letter.py rend en DOCX une page.\n// Le texte vient de /api/letter, deja nettoye la-bas (ni tiret cadratin, ni\n// markdown, ni anciennete inventee) : on ne refait pas ce travail, on met en forme.\n//\n// [skip ci] DANS LE MESSAGE DE COMMIT, ET C'EST STRUCTUREL :\n// build-and-commit-pdfs.yml declare concurrency: cancel-in-progress sur la\n// branche. Sans [skip ci], le push de la lettre lance un run que le push du CV\n// annule aussitot, et les deux runs peuvent se cancelliser mutuellement (constate\n// le 06/08 : runs 31108490726 et 31108491527, tous deux annules, zero PDF).\n// Une candidature = un seul run d'Action, celui du CV, qui arrive en dernier.\nconst cfg = $('⚙️ Config').first().json;\nconst ctx = $('🧩 Contexte candidature').first().json;\nconst lettre = $('🌐 career-ops: lettre').first().json ?? {};\nconst file = $json ?? {};\n\nconst q = (v) => JSON.stringify(String(v ?? '').replace(/\\s+/g, ' ').trim());\n\nconst paras = String(lettre.letter_body || '')\n  .split(/\\n\\s*\\n/)\n  .map((p) => p.split('\\n').map((l) => l.trim()).filter(Boolean).join(' '))\n  .map((p) => p.replace(/\\s+/g, ' ').trim())\n  .filter(Boolean);\n\nif (paras.length === 0) {\n  throw new Error('lettre vide apres mise en forme : rien ne doit etre commite ni envoye');\n}\n\nconst mots = paras.join(' ').split(/\\s+/).filter(Boolean).length;\nconst bodyBlock = paras.map((p) => '    ' + p).join('\\n\\n');\nconst today = new Date().toISOString().slice(0, 10);\nconst locale = cfg.targetLanguage || 'fr';\nconst closing = locale === 'en'\n  ? 'Kind regards,'\n  : \"Je vous prie d'agreer, Madame, Monsieur, l'expression de mes salutations distinguees.\";\n\nconst yamlText = [\n  'meta:',\n  '  locale: ' + q(locale),\n  '  generated_at: ' + q(today),\n  'sender:',\n  '  name: ' + q(cfg.candidateName),\n  '  title: ' + q('Ingénieur en automatisation & intégration IA'),\n  '  email: ' + q(cfg.candidateEmail),\n  '  phone: ' + q(cfg.candidatePhone),\n  '  location: ' + q('Nogent-sur-Marne (94)'),\n  'target:',\n  '  company: ' + q(ctx.offre.company),\n  '  job_title: ' + q(ctx.offre.title),\n  '  job_url: ' + q(ctx.offre.url),\n  '  recipient: ' + q(lettre.salutation || 'Madame, Monsieur,'),\n  '  city: ' + q('Nogent-sur-Marne'),\n  'letter:',\n  '  subject: ' + q(lettre.email_subject || ''),\n  '  body: |',\n  bodyBlock,\n  '  closing: ' + q(closing),\n  '',\n].join('\\n');\n\nconst bodyObj = {\n  message: 'chore(letter): lettre ' + (ctx.offre.company || 'candidature') + ' - ' + (ctx.offre.title || 'poste') + ' [skip ci]',\n  content: Buffer.from(yamlText, 'utf8').toString('base64'),\n  branch: ctx.branchName,\n};\nif (file.sha) bodyObj.sha = file.sha;\n\nreturn [{ json: { ...ctx, letterWords: mots, letterTooLong: mots > 470, letterBodyRaw: JSON.stringify(bodyObj) } }];"
+      }
+    },
+    {
+      "id": "93dc7dfb-2540-4a4e-9dd2-269e60de6eb4",
+      "name": "🐙 GitHub: Ecrire la lettre",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -384,
+        0
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubLetterFilePath }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.letterBodyRaw }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a0c433f2-9337-47b7-9e43-bf412fb5d678",
+      "name": "🐙 GitHub: Lire le CV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -160,
+        0
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubLocaleFilePath }}?ref={{ $('🧩 Contexte candidature').first().json.branchName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "e0a331c4-df92-4d01-83a2-6ceae5e32579",
+      "name": "🧩 Contexte CV YAML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const file = $json;\nconst ctx = $('🧩 Contexte candidature').first().json;\nconst originalYaml = Buffer.from(String(file.content || '').replace(/\\n/g, ''), 'base64').toString('utf8');\n\nif (!originalYaml.trim()) {\n  throw new Error('locales/fr.yml illisible sur la branche ' + ctx.branchName + ' : adaptation impossible');\n}\n\nreturn [{ json: { ...ctx, previousFileSha: file.sha, originalYaml, originalCharCount: originalYaml.length } }];"
+      }
+    },
+    {
+      "id": "a1b6f6c1-94b4-467b-b5f6-5a2967cfab33",
+      "name": "🌐 career-ops: mots-cles ATS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Config').first().json.careerOpsBase }}/api/tailor",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ jobTitle: $json.offre.title, company: $json.offre.company, jobDescription: $json.offre.description }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "notes": "POST /api/tailor : des mots-cles ATS deterministes, tous presents dans cv.md ET dans l'annonce (anti-invention par construction, zero LLM). Indisponible = on retombe sur la regle ATS du mode, et keywordsSource le dit.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f25eafd6-e230-45be-9661-7320fe1ce692",
+      "name": "🧩 Mots-cles ou repli",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Contrat gele : POST /api/tailor -> { keywords: string[], titre? }\n// Indisponible ou vide -> keywordsSource = 'mode', et c'est la regle ATS de\n// modes/pdf.md qui tranchera cote career-ops. Le repli est explicite, jamais muet.\nconst prep = $('🧩 Contexte CV YAML').first().json;\nconst rep = $input.first().json ?? {};\n\nconst keywords = (Array.isArray(rep.keywords) ? rep.keywords : [])\n  .map((k) => String(k || '').trim())\n  .filter((k) => k.length > 0 && k.length <= 60)\n  .filter((k, i, tout) => tout.indexOf(k) === i)\n  .slice(0, 12);\n\nreturn [{\n  json: {\n    ...prep,\n    keywords,\n    keywordsSource: keywords.length > 0 ? 'api' : 'mode',\n    titreImpose: String(rep.titre || '').trim(),\n  },\n  pairedItem: 0,\n}];"
+      }
+    },
+    {
+      "id": "68b2fc06-a9fd-4157-93a8-524f4eb49a99",
+      "name": "🌐 career-ops: adapter le CV (skill)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        736,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Config').first().json.careerOpsBase }}/api/run",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ kind: 'cv-yaml', input: $json.cleRun, cliId: 'claude', payload: { yaml: $json.originalYaml, offre: $json.offre, keywords: $json.keywords, consigne: $json.consigneCv } }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "text/plain"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 780000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "flux"
+            }
+          }
+        }
+      },
+      "notes": "POST /api/run kind=cv-yaml : c'est LE skill career-ops. L'agent y lit le vrai modes/pdf.md, cv.md et config/profile.yml — il n'y a plus aucun prompt d'adaptation ecrit dans n8n. Reponse en NDJSON, lue en texte : le noeud suivant en extrait l'evenement artifact. maxDuration cote route = 800 s.",
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "611cd1df-4241-4e82-89be-be5ec4b35f63",
+      "name": "🧩 Lire l'artefact du run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// /api/run rend du NDJSON : un objet JSON par ligne. Le seul evenement qui\n// compte est { type: 'artifact', adaptedYaml } — la route ne l'emet qu'apres\n// avoir verifie qu'aucune cle n'a saute, qu'aucune date n'a bouge, qu'aucune\n// anciennete n'a ete inventee et que le volume est plausible.\nconst prep = $('🧩 Mots-cles ou repli').first().json;\nconst brut = String($json.flux ?? $json.data ?? '');\n\nlet adaptedYaml = '';\nconst erreurs = [];\nfor (const ligne of brut.split('\\n')) {\n  const t = ligne.trim();\n  if (!t) continue;\n  let ev;\n  try { ev = JSON.parse(t); } catch (e) { continue; }\n  if (ev && ev.type === 'artifact' && typeof ev.adaptedYaml === 'string') adaptedYaml = ev.adaptedYaml;\n  if (ev && ev.type === 'error' && ev.msg) erreurs.push(String(ev.msg));\n}\n\n// Le corps peut aussi etre une erreur JSON simple (400/500 avant le flux).\nif (!adaptedYaml && !erreurs.length) {\n  try {\n    const j = JSON.parse(brut);\n    if (j && j.error) erreurs.push(String(j.error));\n  } catch (e) { /* ce n'etait pas du JSON : le flux parle deja */ }\n}\n\nconst cvAdapte = adaptedYaml.trim().length > 0;\nconst cvMotif = cvAdapte\n  ? ''\n  : (erreurs.join(' | ') || \"le skill n'a rendu aucun CV adapte\").slice(0, 400);\n\nreturn [{ json: { ...prep, adaptedYaml, cvAdapte, cvMotif }, pairedItem: 0 }];"
+      },
+      "notes": "Un CV NON adapte mais VRAI vaut mieux qu'un CV adapte et faux : si le skill n'a rien rendu, on garde le CV d'origine (qui recevra quand meme les mots-cles ATS) et le motif remonte jusqu'au courriel « A valider ». Rien n'est masque."
+    },
+    {
+      "id": "f910a98a-9c1a-4290-8332-5579b0f702e5",
+      "name": "🧩 Construire le CV YAML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const payload = $('🧩 Contexte CV YAML').first().json;\nconst tailor = $('🧩 Mots-cles ou repli').first().json;\nconst adaptedYaml = String($json.adaptedYaml ?? '').trim();\nconst originalYaml = String(payload.originalYaml || '');\nconst source = adaptedYaml.length > 0 ? adaptedYaml : originalYaml;\n\n// L'API contents rend le blob, donc du LF (.gitattributes : text=auto eol=lf).\n// On reste agnostique et on recolle avec la fin de ligne DOMINANTE, pour ne\n// jamais fabriquer un fichier a fins de ligne melangees.\nconst eol = (source.match(/\\r\\n/g) || []).length > (source.match(/(?<!\\r)\\n/g) || []).length ? '\\r\\n' : '\\n';\nconst lignesOrig = originalYaml.split(/\\r?\\n/);\n\n// GARDE-FOU 1 : scalaires plain dangereux. Run 958225 : « Ma methode : fiabiliser »\n// rendu sur une seule ligne -> typst refuse le fichier, Action en echec, zero PDF.\nconst risque = (v) => !/^[>|[{'\"&*!]/.test(v) && (/:\\s/.test(v) || /\\s#/.test(v));\nlet lignes = source.split(/\\r?\\n/).map((l) => {\n  let m = l.match(/^(\\s*(?:- )?)([A-Za-z_][A-Za-z0-9_-]*): (.+?)\\s*$/);\n  if (m && risque(m[3])) return m[1] + m[2] + ': ' + JSON.stringify(m[3]);\n  m = l.match(/^(\\s*- )(?![A-Za-z_][A-Za-z0-9_-]*: )(.+?)\\s*$/);\n  if (m && risque(m[2])) return m[1] + JSON.stringify(m[2]);\n  return l;\n});\n\nfunction keywordsDe(lignesSrc) {\n  const j = lignesSrc.findIndex((l) => /^keywords\\s*:/.test(l));\n  if (j === -1) return [];\n  const reste = lignesSrc[j].replace(/^keywords\\s*:/, '').trim();\n  if (reste.startsWith('[')) {\n    try { const v = JSON.parse(reste); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; }\n  }\n  const out = [];\n  for (let k = j + 1; k < lignesSrc.length && /^\\s+\\S/.test(lignesSrc[k]); k++) {\n    const m = lignesSrc[k].match(/^\\s+-\\s+(.+?)\\s*$/);\n    if (!m) continue;\n    let v = m[1].trim();\n    if ((v.startsWith('\"') && v.endsWith('\"')) || (v.startsWith(\"'\") && v.endsWith(\"'\"))) {\n      try { v = JSON.parse(v.replace(/^'|'$/g, '\"')); } catch (e) { v = v.slice(1, -1); }\n    }\n    out.push(String(v));\n  }\n  return out;\n}\n\nconst utiliseApi = tailor.keywordsSource === 'api' && Array.isArray(tailor.keywords) && tailor.keywords.length > 0;\nconst mots = utiliseApi ? tailor.keywords : keywordsDe(lignesOrig);\nconst ligneKeywords = 'keywords: [' + mots.map((m) => JSON.stringify(String(m))).join(', ') + ']';\n\n// GARDE-FOU 2 : quand /api/tailor a repondu, c'est SA liste qui fait foi. Et si\n// la cle keywords a ete supprimee en amont, on la restaure : sans elle, la\n// section ATS « Competences cles » disparait du PDF.\nconst iKw = lignes.findIndex((l) => /^keywords\\s*:/.test(l));\nlet keywordsInjectes = false;\nconst keywordsRestaures = iKw === -1;\n\nif (iKw !== -1) {\n  if (utiliseApi) {\n    let j = iKw + 1;\n    while (j < lignes.length && /^\\s+\\S/.test(lignes[j])) j++;\n    lignes = [...lignes.slice(0, iKw), ligneKeywords, ...lignes.slice(j)];\n    keywordsInjectes = true;\n  }\n} else {\n  let apres = null;\n  const j = lignesOrig.findIndex((l) => /^keywords\\s*:/.test(l));\n  for (let k = j + 1; j !== -1 && k < lignesOrig.length; k++) {\n    const m = lignesOrig[k].match(/^([A-Za-z_][A-Za-z0-9_-]*)\\s*:/);\n    if (m) { apres = m[1]; break; }\n  }\n  const pos = apres ? lignes.findIndex((l) => new RegExp('^' + apres + '\\\\s*:').test(l)) : -1;\n  if (pos !== -1) lignes = [...lignes.slice(0, pos), ligneKeywords, '', ...lignes.slice(pos)];\n  else lignes = [...lignes, ligneKeywords];\n  keywordsInjectes = utiliseApi;\n}\n\nlet finalYaml = lignes.join(eol);\nif (!finalYaml.endsWith(eol)) finalYaml += eol;\n\nconst bodyObj = {\n  message: 'chore(cv): CV adapte ' + (payload.offre.company || 'candidature') + ' - ' + (payload.offre.title || 'poste'),\n  content: Buffer.from(finalYaml, 'utf8').toString('base64'),\n  branch: payload.branchName,\n};\nif (payload.previousFileSha) bodyObj.sha = payload.previousFileSha;\n\nreturn [{\n  json: {\n    ...payload,\n    cvAdapte: $json.cvAdapte === true,\n    cvMotif: String($json.cvMotif || ''),\n    keywordsSource: tailor.keywordsSource,\n    keywordsRetenus: mots,\n    keywordsInjectes,\n    keywordsRestaures,\n    cvBodyRaw: JSON.stringify(bodyObj),\n  },\n}];"
+      },
+      "notes": "Garde-fous portes tels quels du workflow K3i1VbzSLuJYJLBM, ou ils ont ete ecrits apres l'incident du run 958225 : requalification des scalaires plain dangereux (un « : » nu cassait le rendu Typst) et injection ou restauration de la cle keywords (sa suppression faisait disparaitre la section ATS)."
+    },
+    {
+      "id": "5d4c5a46-55ac-44be-9448-7ae62e408a99",
+      "name": "🐙 GitHub: Ecrire le CV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1408,
+        0
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubLocaleFilePath }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.cvBodyRaw }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4061be80-02fd-4c66-9763-52b2c269e389",
+      "name": "🧩 Etat de la branche",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Le commit du CV est le DERNIER push de la branche : c'est lui que l'Action\n// « Build and Commit PDFs » va traiter. On garde son sha pour retrouver LE bon\n// run, et pas celui d'une autre candidature poussee au meme moment.\nconst ctx = $('🧩 Construire le CV YAML').first().json;\nconst cfg = $('⚙️ Config').first().json;\nconst rep = $json.body ?? $json;\n\nreturn [{\n  json: {\n    ...ctx,\n    commitSha: rep.commit?.sha || rep.content?.sha || '',\n    commitUrl: rep.commit?.html_url || '',\n    targetWorkflowName: cfg.githubActionWorkflowName,\n    pollAttempt: 0,\n    pollIntervalSeconds: Number(cfg.githubActionPollSeconds || 20),\n    pollMaxAttempts: Number(cfg.githubActionMaxPollAttempts || 30),\n  },\n}];"
+      }
+    },
+    {
+      "id": "35c39684-5d3d-4ac3-98d9-ec992b05373b",
+      "name": "⏳ Attendre l'Action GitHub",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1856,
+        0
+      ],
+      "parameters": {
+        "amount": "={{ $json.pollIntervalSeconds || 20 }}"
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "03a908c7-75b3-4985-97a6-bb8fe986c3c9",
+      "name": "🐙 GitHub: Dernier run d'Action",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2080,
+        0
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/actions/runs?branch={{ encodeURIComponent($json.branchName) }}&event=push&per_page=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "e3afdddd-8ae6-4df6-b4dc-45c2563fc2d0",
+      "name": "🧩 Statut du run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const context = $('⏳ Attendre l\\'Action GitHub').item.json;\nconst runs = Array.isArray($json.workflow_runs) ? $json.workflow_runs : [];\nconst targetWorkflowName = String(context.targetWorkflowName || 'Build and Commit PDFs');\nconst commitSha = String(context.commitSha || '').toLowerCase();\n\n// Appariement par nom d'Action ET sha du commit : c'est le seul moyen sur de ne\n// pas conclure sur le run d'une AUTRE candidature poussee entre-temps.\nlet matchingRun = null;\nif (commitSha) {\n  matchingRun = runs.find((run) =>\n    String(run.name || '') === targetWorkflowName &&\n    String(run.head_sha || '').toLowerCase() === commitSha);\n}\nif (!matchingRun) {\n  matchingRun = runs.find((run) => String(run.name || '') === targetWorkflowName);\n}\n\nconst pollAttempt = Number(context.pollAttempt || 0) + 1;\nconst pollMaxAttempts = Number(context.pollMaxAttempts || 30);\nconst completed = matchingRun?.status === 'completed' || pollAttempt >= pollMaxAttempts;\n\nreturn [{\n  json: {\n    ...context,\n    pollAttempt,\n    targetWorkflowName,\n    runId: matchingRun?.id ?? '',\n    runStatus: matchingRun?.status ?? 'not_found',\n    runConclusion: matchingRun?.conclusion ?? '',\n    runHtmlUrl: matchingRun?.html_url ?? '',\n    completed,\n    // Depasser le plafond sans run termine n'est PAS un succes : sans ce drapeau,\n    // un timeout ressemblerait a une Action qui n'a simplement pas reussi.\n    pollEpuise: matchingRun?.status !== 'completed' && pollAttempt >= pollMaxAttempts,\n  },\n}];"
+      }
+    },
+    {
+      "id": "a3266e41-4453-4d3f-9fc7-e729ea3ca996",
+      "name": "🔀 Run termine ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2528,
+        0
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "run-completed",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.completed }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "7b379074-39da-4271-a49c-41c0646f9e29",
+      "name": "🔀 Run reussi ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2752,
+        -96
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "run-success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.runConclusion }}",
+              "rightValue": "success"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cfcac91b-0c4f-468f-88de-54eb4b8d0522",
+      "name": "📥 Telecharger le CV PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2976,
+        -192
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubPdfPath }}?ref={{ encodeURIComponent($json.branchName) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.raw"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6d999dc0-4097-402d-b95b-9c30f88a462e",
+      "name": "📥 Telecharger la lettre DOCX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3200,
+        -192
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $('⚙️ Config').first().json.githubLetterDocxPath }}?ref={{ encodeURIComponent($('🧩 Statut du run').first().json.branchName) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.raw"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "docx"
+            }
+          }
+        }
+      },
+      "notes": "Absence toleree : un CV sans lettre reste decidable. Le contraire, non — d'ou la sortie erreur sur le PDF.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "d2df43e4-0339-4e79-9295-18702d1806eb",
+      "name": "🧩 Aucun PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3200,
+        96
+      ],
+      "parameters": {
+        "jsCode": "const run = $('🧩 Statut du run').first().json;\nreturn [{ json: { ...run, incident: \"L'Action a bien tourne mais aucun CV PDF n'a ete trouve sur la branche \" + run.branchName + \".\" } }];"
+      }
+    },
+    {
+      "id": "ceb1b210-9f35-483d-b71e-91405c5ef6ba",
+      "name": "🧩 Action GitHub en echec",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        192
+      ],
+      "parameters": {
+        "jsCode": "const run = $json;\nconst motif = run.pollEpuise\n  ? \"l'Action GitHub n'a pas termine apres \" + run.pollAttempt + ' verifications : le CV n a pas pu etre rendu\"'\n  : \"l'Action GitHub s'est terminee en echec (conclusion : \" + (run.runConclusion || 'inconnue') + ')';\nreturn [{ json: { ...run, incident: motif } }];"
+      }
+    },
+    {
+      "id": "9c00d1c4-b613-4053-9834-19300039571d",
+      "name": "🧩 Preparer la fiche",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        -192
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('⚙️ Config').first().json;\nconst ctx = $('🧩 Statut du run').first().json;\nconst lettre = $('🌐 career-ops: lettre').first().json ?? {};\n\nconst cleanTxt = (s) => String(s || '')\n  .replace(/\\*\\*([^*]+)\\*\\*/g, '$1')\n  .replace(/\\[([^\\]]+)\\]\\([^)]+\\)/g, '$1')\n  .replace(/ [—–] /g, ', ').replace(/[—–]/g, ', ');\n\nconst repoBase = 'https://github.com/' + cfg.githubOwner + '/' + cfg.githubRepo;\nconst branch = ctx.branchName;\n\n// La decision remonte au workflow 3 par ce webhook. L'id voyage dans l'URL :\n// career-ops POSTe { decision, consigne, raison } SANS id, il ne le connait que\n// par la fiche. Sans ce parametre, le workflow 3 ne saurait pas quoi envoyer.\nconst decisionUrl = String(cfg.decisionWebhook) + '?id=' + encodeURIComponent(ctx.inboxId);\n\nconst fiche = {\n  schema: 'career-ops-inbox/v2',\n  id: ctx.inboxId,\n  statut: 'A_VALIDER',\n  source: 'n8n/france-travail',\n  cree_le: ctx.nowIso,\n  execution_id: String($execution.id),\n  decision_url: decisionUrl,\n  decisions_acceptees: ['valider', 'retoucher_lettre', 'retoucher_cv', 'refuser'],\n  // job_id : sans lui, une retouche ne pourrait pas retrouver l'annonce complete\n  // dans le journal des offres, et le CV serait readapte sans sa description.\n  job_id: ctx.jobId || '',\n  poste: ctx.offre.title,\n  entreprise: ctx.offre.company,\n  lieu: ctx.offre.location,\n  url_offre: ctx.offre.url,\n  courriel_contact: ctx.courrielContact,\n  score: ctx.score,\n  pourquoi_ca_matche: cleanTxt(ctx.offre.whyMatch),\n  objet_mail: cleanTxt(lettre.email_subject || ''),\n  salutation: cleanTxt(lettre.salutation || ''),\n  apercu_lettre: cleanTxt(lettre.letter_body || ''),\n  arguments_cles: (lettre.key_selling_points || []).map(cleanTxt),\n  branche_github: branch,\n  cv_pdf: cfg.githubPdfPath,\n  lettre_docx: cfg.githubLetterDocxPath,\n  cv_url: repoBase + '/blob/' + branch + '/' + cfg.githubPdfPath,\n  lettre_url: repoBase + '/blob/' + branch + '/' + cfg.githubLetterDocxPath,\n  // Le CV a-t-il vraiment ete adapte, ou est-ce l'original ? Linéo doit le voir\n  // avant de valider, pas le decouvrir chez le recruteur.\n  cv_adapte: ctx.cvAdapte === true,\n  cv_motif: ctx.cvMotif || '',\n  mots_cles_source: ctx.keywordsSource || '',\n};\n\nreturn [{ json: { ...ctx, fiche, courrielContact: String(ctx.courrielContact || '').trim() } }];"
+      },
+      "notes": "decision_url EST la porte : career-ops POSTe dessus depuis la page « A valider », et c'est ce POST qui declenche le workflow 3. Tant qu'il n'a pas lieu, rien ne part."
+    },
+    {
+      "id": "6e0deb91-f8ba-4611-8785-f31b6b2e2f39",
+      "name": "🐙 GitHub: Fiche existante ?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3648,
+        -192
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $json.inboxPath }}?ref={{ $('⚙️ Config').first().json.githubBaseBranch }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "404 attendu au premier round. Une retouche repasse ici et recupere le sha : sans lui, l'API contents refuse le PUT (422) et la porte ne se rouvrirait jamais.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "87756526-439c-4ab7-bb7b-0036c4d7fda4",
+      "name": "🧩 Fiche: corps + sha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3872,
+        -192
+      ],
+      "parameters": {
+        "jsCode": "// Upsert de la fiche. `revision` compte les rounds : career-ops s'en sert pour\n// savoir si l'aller-retour d'une retouche est termine (fichesEnAttenteDepuis).\nconst prep = $('🧩 Preparer la fiche').first().json;\nconst cfg = $('⚙️ Config').first().json;\nconst prev = $input.first().json ?? {};\n\nconst sha = typeof prev.sha === 'string' && prev.sha ? prev.sha : null;\n\nlet revision = 0;\nif (sha && typeof prev.content === 'string') {\n  try {\n    const ancienne = JSON.parse(Buffer.from(prev.content.replace(/\\n/g, ''), 'base64').toString('utf8'));\n    revision = Number(ancienne.revision || 0) + 1;\n  } catch (e) {\n    revision = 1;\n  }\n}\n\nconst fiche = { ...prep.fiche, revision };\n\nconst body = {\n  message: (sha ? 'chore(inbox): maj ' : 'chore(inbox): ') + (fiche.entreprise || 'candidature') + ' - ' + (fiche.poste || 'poste'),\n  content: Buffer.from(JSON.stringify(fiche, null, 2) + '\\n', 'utf8').toString('base64'),\n  branch: cfg.githubBaseBranch,\n};\nif (sha) body.sha = sha;\n\nreturn [{ json: { ...prep, fiche, ficheRevision: revision, inboxBodyRaw: JSON.stringify(body) } }];"
+      }
+    },
+    {
+      "id": "08e068cc-9c40-427c-a0cd-57ac7f4f598e",
+      "name": "🐙 GitHub: Ecrire la fiche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4096,
+        -192
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config').first().json.githubOwner }}/{{ $('⚙️ Config').first().json.githubRepo }}/contents/{{ $json.inboxPath }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.inboxBodyRaw }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-2-generation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "95b45a5b-d1f0-4d19-8a91-2c3cc6d830a2",
+      "name": "🐘 Postgres: offre + candidature",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4320,
+        -192
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH f AS (SELECT $1::jsonb AS d),\no AS (\n  INSERT INTO career_ops.offre AS cible (\n    id, source, poste, entreprise, lieu, teletravail, url, courriel_contact,\n    score, publiee_le, pourquoi_ca_matche, fiche_path, fiche_schema)\n  SELECT\n    d->>'id',\n    COALESCE(NULLIF(d->>'source', ''), 'inconnue'),\n    COALESCE(d->>'poste', ''),\n    COALESCE(d->>'entreprise', ''),\n    NULLIF(COALESCE(d->'lieu'->>'city', CASE WHEN jsonb_typeof(d->'lieu') = 'string' THEN d->>'lieu' END, ''), ''),\n    NULLIF(COALESCE(d->'lieu'->>'remotePolicy', ''), ''),\n    NULLIF(d->>'url_offre', ''),\n    NULLIF(btrim(COALESCE(d->>'courriel_contact', '')), ''),\n    NULLIF(d->>'score', '')::smallint,\n    NULLIF(d->>'publiee_le', '')::date,\n    NULLIF(btrim(COALESCE(d->>'pourquoi_ca_matche', '')), ''),\n    COALESCE(NULLIF(d->>'fiche_path', ''), 'data-inbox/' || (d->>'id') || '.json'),\n    d->>'schema'\n  FROM f\n  ON CONFLICT (id) DO UPDATE SET\n    source = EXCLUDED.source, poste = EXCLUDED.poste, entreprise = EXCLUDED.entreprise,\n    lieu = EXCLUDED.lieu, teletravail = EXCLUDED.teletravail, url = EXCLUDED.url,\n    courriel_contact = COALESCE(EXCLUDED.courriel_contact, cible.courriel_contact),\n    score = COALESCE(EXCLUDED.score, cible.score),\n    publiee_le = COALESCE(EXCLUDED.publiee_le, cible.publiee_le),\n    pourquoi_ca_matche = COALESCE(EXCLUDED.pourquoi_ca_matche, cible.pourquoi_ca_matche),\n    fiche_path = EXCLUDED.fiche_path, fiche_schema = EXCLUDED.fiche_schema, projete_le = now()\n  RETURNING cible.id\n),\nc AS (\n  INSERT INTO career_ops.candidature AS cand (\n    offre_id, statut, branche_github, execution_id, revision, inbox_path, cree_le)\n  SELECT (SELECT id FROM o), 'A_VALIDER', d->>'branche_github', NULLIF(d->>'execution_id', ''),\n         COALESCE(NULLIF(d->>'revision', '')::int, 0),\n         COALESCE(NULLIF(d->>'fiche_path', ''), 'data-inbox/' || (d->>'id') || '.json'),\n         COALESCE(NULLIF(d->>'cree_le', '')::timestamptz, now())\n  FROM f\n  WHERE NULLIF(d->>'branche_github', '') IS NOT NULL\n  ON CONFLICT (branche_github) DO UPDATE SET\n    statut = CASE WHEN cand.statut IN ('ENVOYEE', 'REFUSEE') THEN cand.statut ELSE 'A_VALIDER' END,\n    revision = GREATEST(cand.revision, EXCLUDED.revision),\n    inbox_path = EXCLUDED.inbox_path, projete_le = now()\n  RETURNING cand.id, cand.statut, cand.revision\n)\nSELECT (SELECT id FROM o) AS offre_id, (SELECT id FROM c) AS candidature_id,\n       (SELECT statut FROM c) AS statut, (SELECT revision FROM c) AS revision,\n       (SELECT count(*) FROM c) AS candidature_ecrite",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [JSON.stringify($('🧩 Fiche: corps + sha').first().json.fiche)] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "A_RECONNECTER",
+          "name": "postgres (a reconnecter)"
+        }
+      },
+      "notes": "Projection de lecture (db/upsert.sql). Non bloquante : la fiche GitHub est la source de verite de la porte de validation, la base ne sert qu'aux vues et aux statistiques.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "2a892256-be86-4630-ab33-0594df6e7efd",
+      "name": "🧩 Joindre CV + lettre",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4544,
+        -192
+      ],
+      "parameters": {
+        "jsCode": "// Les pieces jointes sont reconstruites depuis les noeuds de telechargement :\n// ni Postgres ni l'ecriture GitHub ne transportent le binaire.\nconst prep = $('🧩 Fiche: corps + sha').first().json;\n\nconst bin = {};\ntry {\n  const b = $('📥 Telecharger le CV PDF').first().binary || {};\n  if (b.data) bin.data = { ...b.data, fileName: 'cv-BIRIBIN-LINEO.pdf', fileExtension: 'pdf' };\n} catch (e) { /* pas de PDF : le chemin d'incident a deja pris la main */ }\ntry {\n  const b = $('📥 Telecharger la lettre DOCX').first().binary || {};\n  if (b.docx) bin.docx = { ...b.docx, fileName: 'lettre-BIRIBIN-LINEO.docx', fileExtension: 'docx' };\n} catch (e) { /* lettre absente : tolere */ }\n\nconst pieces = [];\nif (bin.data) pieces.push('CV PDF adapte au poste');\nif (bin.docx) pieces.push('lettre de motivation Word (1 page)');\n\nreturn [{\n  json: {\n    ...prep,\n    attachmentNames: pieces.join(' + '),\n    attachmentProps: [bin.data ? 'data' : null, bin.docx ? 'docx' : null].filter(Boolean).join(','),\n  },\n  binary: bin,\n}];"
+      }
+    },
+    {
+      "id": "8de2651c-2aa0-4d27-bea0-1bee05245bd3",
+      "name": "📧 A valider (Lineo)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        4768,
+        -192
+      ],
+      "parameters": {
+        "sendTo": "={{ $('⚙️ Config').first().json.candidateEmail }}",
+        "subject": "=[A VALIDER] {{ $json.fiche.entreprise }} - {{ $json.fiche.poste }}",
+        "message": "=<h2>Une candidature attend ta décision</h2>\n<p>Rien n'est parti. Ouvre career-ops, page <strong>« À valider »</strong>, pour valider, retoucher le CV ou la lettre, ou refuser. Tant qu'aucune décision n'est enregistrée, aucun mail ne peut partir.</p>\n<p><strong>Entreprise :</strong> {{ $json.fiche.entreprise }}<br>\n<strong>Poste :</strong> {{ $json.fiche.poste }}<br>\n<strong>Offre :</strong> <a href=\"{{ $json.fiche.url_offre }}\">{{ $json.fiche.url_offre }}</a><br>\n<strong>Destinataire si tu valides :</strong> {{ $json.courrielContact || 'aucun courriel recruteur connu, dépôt manuel sur le portail' }}<br>\n<strong>Pièces jointes :</strong> {{ $json.attachmentNames || 'aucune' }}<br>\n<strong>CV :</strong> {{ $json.fiche.cv_adapte ? 'adapté au poste par career-ops (mots-clés ' + $json.fiche.mots_cles_source + ')' : '⚠️ NON adapté, le CV de référence a été utilisé tel quel : ' + $json.fiche.cv_motif }}</p>\n<hr>\n<h3>Aperçu du message qui partirait au recruteur</h3>\n<p><strong>Objet :</strong> {{ $json.fiche.objet_mail }}</p>\n<blockquote>\n{{ $json.fiche.salutation }}<br><br>\n{{ String($json.fiche.apercu_lettre || '').replace(/\\n/g, '<br>') }}\n</blockquote>\n<h3>Points clés</h3>\n<ul>{{ ($json.fiche.arguments_cles || []).map(p => '<li>' + p + '</li>').join('') }}</ul>",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "={{ $json.attachmentProps || 'data' }}"
+              }
+            ]
+          },
+          "appendAttribution": false
+        },
+        "operation": "send"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Ce courriel est une NOTIFICATION, pas la porte. La porte est la page « A valider » de career-ops : c'est son POST sur decision_url qui declenche le workflow 3.",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "e43d4f00-2b38-42e9-b96c-aa23089855f8",
+      "name": "📧 Alerte technique (Lineo)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3648,
+        144
+      ],
+      "parameters": {
+        "sendTo": "={{ $('⚙️ Config').first().json.candidateEmail }}",
+        "subject": "=[ALERTE n8n] Candidature non préparée - {{ $json.offre?.company || 'offre inconnue' }}",
+        "message": "=<h2>⚠️ Aucune candidature n'a été préparée</h2>\n<p>{{ $json.incident }}</p>\n<p><strong>Offre :</strong> <a href=\"{{ $json.offre?.url }}\">{{ $json.offre?.url || '—' }}</a><br>\n<strong>Poste :</strong> {{ $json.offre?.title || '—' }}<br>\n<strong>Branche conservée :</strong> <code>{{ $json.branchName || '—' }}</code><br>\n<strong>Run GitHub :</strong> <a href=\"{{ $json.runHtmlUrl }}\">{{ $json.runHtmlUrl || 'aucun' }}</a></p>\n<p>Aucune fiche n'a été déposée : il n'y a rien à valider tant qu'aucun CV n'est rendu. La branche est conservée pour diagnostic.</p>",
+        "options": {
+          "appendAttribution": false
+        },
+        "operation": "send"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Chemin terminal : sans CV rendu il n'y a rien a valider, donc aucune fiche n'est ecrite et la branche est conservee pour diagnostic.",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "c59f5dcf-5855-444b-bd07-30b96a1425d8",
+      "name": "🧩 Flux NDJSON en texte",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        848,
+        0
+      ],
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "flux",
+        "destinationKey": "flux",
+        "options": {}
+      },
+      "notes": "Le NDJSON de /api/run est recu en binaire puis converti en texte. Demande directement en texte, n8n tente de serialiser le socket de la reponse en flux et jette « Converting circular structure to JSON » (constate le 06/08, execution 959913 : le CV n'etait jamais adapte, en silence).",
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "🔔 Webhook: generer la candidature": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config": {
+      "main": [
+        [
+          {
+            "node": "🧩 Contexte candidature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Contexte candidature": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: lettre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: lettre": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Base ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Base ref": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Branche existante ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Branche existante ?": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Lire la lettre",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🐙 GitHub: Creer la branche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Creer la branche": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Lire la lettre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Lire la lettre": {
+      "main": [
+        [
+          {
+            "node": "🧩 Construire la lettre YAML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Construire la lettre YAML": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Ecrire la lettre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Ecrire la lettre": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Lire le CV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Lire le CV": {
+      "main": [
+        [
+          {
+            "node": "🧩 Contexte CV YAML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Contexte CV YAML": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: mots-cles ATS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: mots-cles ATS": {
+      "main": [
+        [
+          {
+            "node": "🧩 Mots-cles ou repli",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Mots-cles ou repli": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: adapter le CV (skill)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Lire l'artefact du run": {
+      "main": [
+        [
+          {
+            "node": "🧩 Construire le CV YAML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Construire le CV YAML": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Ecrire le CV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Ecrire le CV": {
+      "main": [
+        [
+          {
+            "node": "🧩 Etat de la branche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Etat de la branche": {
+      "main": [
+        [
+          {
+            "node": "⏳ Attendre l'Action GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Attendre l'Action GitHub": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Dernier run d'Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Dernier run d'Action": {
+      "main": [
+        [
+          {
+            "node": "🧩 Statut du run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Statut du run": {
+      "main": [
+        [
+          {
+            "node": "🔀 Run termine ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Run termine ?": {
+      "main": [
+        [
+          {
+            "node": "🔀 Run reussi ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⏳ Attendre l'Action GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Run reussi ?": {
+      "main": [
+        [
+          {
+            "node": "📥 Telecharger le CV PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🧩 Action GitHub en echec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Telecharger le CV PDF": {
+      "main": [
+        [
+          {
+            "node": "📥 Telecharger la lettre DOCX",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🧩 Aucun PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Telecharger la lettre DOCX": {
+      "main": [
+        [
+          {
+            "node": "🧩 Preparer la fiche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Preparer la fiche": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Fiche existante ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Fiche existante ?": {
+      "main": [
+        [
+          {
+            "node": "🧩 Fiche: corps + sha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Fiche: corps + sha": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: Ecrire la fiche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: Ecrire la fiche": {
+      "main": [
+        [
+          {
+            "node": "🐘 Postgres: offre + candidature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐘 Postgres: offre + candidature": {
+      "main": [
+        [
+          {
+            "node": "🧩 Joindre CV + lettre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Joindre CV + lettre": {
+      "main": [
+        [
+          {
+            "node": "📧 A valider (Lineo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Aucun PDF": {
+      "main": [
+        [
+          {
+            "node": "📧 Alerte technique (Lineo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Action GitHub en echec": {
+      "main": [
+        [
+          {
+            "node": "📧 Alerte technique (Lineo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: adapter le CV (skill)": {
+      "main": [
+        [
+          {
+            "node": "🧩 Flux NDJSON en texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Flux NDJSON en texte": {
+      "main": [
+        [
+          {
+            "node": "🧩 Lire l'artefact du run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "tags": []
+}

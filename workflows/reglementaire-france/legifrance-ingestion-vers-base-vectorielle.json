@@ -1,0 +1,962 @@
+{
+  "name": "LEGIFRANCE (ACME Aviation) — Ingestion Accords de branche intérim → Supabase",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "id": "cfb8c914-dc23-4d97-b81f-f3211a90fa73",
+      "name": "Hebdomadaire (lundi 3h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -15696,
+        1264
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/consult/code",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ textId: 'LEGITEXT000006072050', date: new Date().toISOString().split('T')[0], sctCid: 'LEGISCTA000006160712' }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "9c8b58fe-a05f-40bf-8683-4776219996c4",
+      "name": "GET Titre V (Code travail)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -15472,
+        1264
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "oAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ ($json.statusCode || 0) >= 200 && ($json.statusCode || 0) < 300 }}",
+              "value2": true
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "59a197fa-64ae-4109-9105-472a4442c7a1",
+      "name": "Fetch OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -15248,
+        1264
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === EXTRACT ARTICLES ===\n// Trouve la section sectionConsultee=true et collecte tous les articles récursivement\n\nconst resp = $input.first().json;\nconst body = resp.body || resp;\nconst sections = body.sections || [];\nconst today = new Date().toISOString().split('T')[0];\n\n// Trouver la section consultée\nfunction findConsultee(sections) {\n  for (const s of sections) {\n    if (s.sectionConsultee) return s;\n    if (s.sections) {\n      const found = findConsultee(s.sections);\n      if (found) return found;\n    }\n  }\n  return null;\n}\n\n// Collecter les articles récursivement\nfunction collectArticles(section, path = []) {\n  const currentPath = [...path, (section.title || '').trim()];\n  const results = [];\n\n  if (section.articles) {\n    for (const a of section.articles) {\n      if (a.content && a.etat && a.etat.startsWith('VIGUEUR')) {\n        results.push({\n          legifrance_id: a.id,\n          legifrance_cid: a.cid || '',\n          num: a.num || '',\n          etat: a.etat,\n          content_html: a.content,\n          content_text: stripHtml(a.content),\n          nota: a.nota || '',\n          date_debut: a.dateDebut || null,\n          section_path: currentPath,\n          container_title: null,\n          consult_date: today,\n          source_type: 'CODE',\n          source_legifrance_id: 'LEGITEXT000006072050'\n        });\n      }\n    }\n  }\n\n  if (section.sections) {\n    for (const sub of section.sections) {\n      results.push(...collectArticles(sub, currentPath));\n    }\n  }\n  return results;\n}\n\n// Strip HTML → texte brut\nfunction stripHtml(html) {\n  return (html || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&[a-z]+;/gi, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst consultee = findConsultee(sections);\nif (!consultee) {\n  throw new Error('Aucune section sectionConsultee=true trouvée');\n}\n\nconst articles = collectArticles(consultee);\n\nreturn [{\n  json: {\n    sectionTitle: (consultee.title || '').trim(),\n    sectionId: consultee.id,\n    totalArticles: articles.length,\n    consultDate: today,\n    articles: articles\n  }\n}];"
+      },
+      "id": "d481fef7-4fe6-47f0-bfa7-ec721f858552",
+      "name": "Extract Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15024,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === ENSURE SOURCE EXISTS IN SUPABASE ===\nconst supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\n\n// Upsert la source 'Code du travail'\nconst sourceResp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `${supabaseUrl}/rest/v1/legal_sources?on_conflict=source_type,legifrance_id`,\n  headers: {\n    'Authorization': `Bearer ${serviceKey}`,\n    'apikey': serviceKey,\n    'Content-Type': 'application/json',\n    'Prefer': 'resolution=merge-duplicates,return=representation'\n  },\n  body: JSON.stringify({\n    source_type: 'CODE',\n    legifrance_id: 'LEGITEXT000006072050',\n    title: 'Code du travail — Titre V (Travail temporaire)',\n    metadata: { sctCid: 'LEGISCTA000006160712', sectionTitle: data.sectionTitle }\n  }),\n  returnFullResponse: false\n});\n\nconst sourceId = Array.isArray(sourceResp) ? sourceResp[0].id : sourceResp.id;\n\n// Créer un ingestion_run\nconst runResp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `${supabaseUrl}/rest/v1/ingestion_runs`,\n  headers: {\n    'Authorization': `Bearer ${serviceKey}`,\n    'apikey': serviceKey,\n    'Content-Type': 'application/json',\n    'Prefer': 'return=representation'\n  },\n  body: JSON.stringify({\n    source_id: sourceId,\n    run_type: 'FULL',\n    status: 'RUNNING',\n    consult_date: data.consultDate,\n    articles_found: data.totalArticles,\n    metadata: { trigger: 'n8n', workflow: '04-ingest-code-travail' }\n  }),\n  returnFullResponse: false\n});\n\nconst runId = Array.isArray(runResp) ? runResp[0].id : runResp.id;\n\nreturn [{\n  json: {\n    sourceId,\n    runId,\n    articles: data.articles,\n    totalArticles: data.totalArticles,\n    consultDate: data.consultDate\n  }\n}];"
+      },
+      "id": "3c9c1f04-9ec1-4bce-84f9-16a5feab458d",
+      "name": "Ensure Source + Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14800,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === BATCH UPSERT ARTICLES INTO SUPABASE ===\nconst supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst { sourceId, runId, articles, consultDate } = data;\n\nconst BATCH_SIZE = 50;\nlet upserted = 0;\nlet unchanged = 0;\nlet errors = 0;\n\nfor (let i = 0; i < articles.length; i += BATCH_SIZE) {\n  const batch = articles.slice(i, i + BATCH_SIZE).map(a => ({\n    source_id: sourceId,\n    legifrance_id: a.legifrance_id,\n    legifrance_cid: a.legifrance_cid,\n    num: a.num,\n    content_html: a.content_html,\n    content_text: a.content_text,\n    nota: a.nota || null,\n    etat: a.etat,\n    date_debut: (a.date_debut ? (typeof a.date_debut === 'number' ? new Date(a.date_debut).toISOString().split('T')[0] : String(a.date_debut).split('T')[0]) : null),\n    section_path: a.section_path,\n    container_title: a.container_title || null,\n    consult_date: consultDate,\n    ingestion_run_id: runId\n  }));\n\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${supabaseUrl}/rest/v1/legal_articles?on_conflict=source_id,legifrance_id`,\n      headers: {\n        'Authorization': `Bearer ${serviceKey}`,\n        'apikey': serviceKey,\n        'Content-Type': 'application/json',\n        'Prefer': 'resolution=merge-duplicates'\n      },\n      body: JSON.stringify(batch),\n      returnFullResponse: false\n    });\n    upserted += batch.length;\n  } catch (err) {\n    errors += batch.length;\n    console.error(`Batch ${i}-${i+BATCH_SIZE} error: ${err.message}`);\n  }\n}\n\n// Mettre à jour le run\nconst status = errors === 0 ? 'SUCCESS' : (upserted > 0 ? 'PARTIAL' : 'FAILED');\nawait this.helpers.httpRequest({\n  method: 'PATCH',\n  url: `${supabaseUrl}/rest/v1/ingestion_runs?id=eq.${runId}`,\n  headers: {\n    'Authorization': `Bearer ${serviceKey}`,\n    'apikey': serviceKey,\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    status,\n    completed_at: new Date().toISOString(),\n    articles_upserted: upserted,\n    articles_unchanged: unchanged,\n    error_message: errors > 0 ? `${errors} articles en erreur` : null\n  }),\n  returnFullResponse: false\n});\n\n\n// Marquer PERIME les articles de cette source NON revus dans ce run (disparus de Legifrance)\nlet perimed = 0;\nconst cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];\ntry {\n  const perResp = await this.helpers.httpRequest({ method: 'PATCH',\n    url: `${supabaseUrl}/rest/v1/legal_articles?source_id=eq.${sourceId}&consult_date=lt.${cutoff}&etat=like.VIGUEUR*`,\n    headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },\n    body: JSON.stringify({ etat: 'PERIME' }), returnFullResponse: false });\n  perimed = Array.isArray(perResp) ? perResp.length : 0;\n} catch (e) { console.log('Perime step error:', e.message); }\n\nreturn [{\n  json: {\n    success: true,\n    status,\n    sourceId,\n    runId,\n    articlesFound: articles.length,\n    articlesUpserted: upserted, articlesPerimed: perimed,\n    articlesErrors: errors,\n    consultDate,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "4b965768-5dc4-48f8-a909-4a8a46ea3071",
+      "name": "Upsert Supabase (batch)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14576,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === HANDLE FETCH ERROR ===\nconst resp = $input.first().json;\nconst statusCode = resp.statusCode || 'unknown';\n\nconst msg = `Ingestion Code du travail failed: HTTP ${statusCode}`;\nconsole.error(msg);\nthrow new Error(msg);"
+      },
+      "id": "49616e7c-8474-437d-8ab9-63336cbd4842",
+      "name": "Handle Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15024,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                2
+              ],
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "id": "3201012a-c671-4091-ae7b-8f6521ab6701",
+      "name": "Hebdomadaire (lundi 4h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -15696,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Genere 1 item par conteneur KALICONT connu (IDCC 2378 travail temporaire)\nconst KNOWN = [\n  'KALICONT000005635905','KALICONT000005635196','KALICONT000005635432',\n  'KALICONT000005635884','KALICONT000005636014','KALICONT000005635977',\n  'KALICONT000043127418'\n];\nreturn KNOWN.map(id => ({ json: { contId: id } }));"
+      },
+      "id": "e0d695d4-181a-4df3-8d4f-b9d60d3ff74f",
+      "name": "Générer conteneurs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15472,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/consult/kaliCont",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ id: $json.contId }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 500
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "1401519c-e303-4729-9ec7-182767a1e41d",
+      "name": "Consult kaliCont",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -15248,
+        1584
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "oAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrege toutes les reponses kaliCont, collecte les articles VIGUEUR\nconst items = $input.all();\nconst today = new Date().toISOString().split('T')[0];\nconst IDCC = '2378';\nfunction stripHtml(h){ return (h||'').replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/gi,' ').replace(/\\s+/g,' ').trim(); }\nfunction collect(section, path, contId, contTitle){\n  path = path || [];\n  const cur = [...path, (section.title||'').trim()];\n  const out = [];\n  if (section.articles) {\n    for (const a of section.articles) {\n      if (a.content && a.content.length>0 && a.etat && a.etat.startsWith('VIGUEUR')) {\n        out.push({\n          legifrance_id: a.id, legifrance_cid: a.cid||'', num: a.num||'', etat: a.etat,\n          content_html: a.content, content_text: stripHtml(a.content), nota: a.nota||'',\n          date_debut: a.dateDebut||null, section_path: cur, container_title: contTitle||'',\n          consult_date: today, source_type: 'CONVENTION_COLLECTIVE', source_legifrance_id: contId, idcc: IDCC\n        });\n      }\n    }\n  }\n  if (section.sections) for (const sub of section.sections) out.push(...collect(sub, cur, contId, contTitle));\n  return out;\n}\nlet articles = [];\nconst containers = [];\nfor (const it of items) {\n  const body = it.json.body || it.json;\n  if (!body || !body.sections) continue;\n  const cat = (body.categorisation||[]).concat(body.activitePro||[]);\n  const isTT = cat.some(c => String(c).toLowerCase().includes('travail temporaire'));\n  // On garde le conteneur meme si categorisation absente (sandbox parfois incomplete)\n  const contId = body.id || '';\n  const contTitle = body.titre || '';\n  if (contId) containers.push(contId);\n  for (const s of body.sections) articles.push(...collect(s, [], contId, contTitle));\n}\nreturn [{ json: {\n  conventionTitle: 'Convention collective IDCC ' + IDCC + ' (Travail temporaire)',\n  totalArticles: articles.length, consultDate: today, idcc: IDCC, containers, articles\n} }];"
+      },
+      "id": "e49e78e7-271c-4b9a-acec-1f0a1cb3c436",
+      "name": "Extraire articles CC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15024,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst sourceResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/legal_sources?on_conflict=source_type,legifrance_id`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},\n  body: JSON.stringify({ source_type:'CONVENTION_COLLECTIVE', legifrance_id:'IDCC_'+data.idcc, title:data.conventionTitle, idcc:data.idcc, metadata:{ containers:data.containers||[] } }),\n  returnFullResponse:false });\nconst sourceId = Array.isArray(sourceResp)?sourceResp[0].id:sourceResp.id;\nconst runResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/ingestion_runs`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'return=representation'},\n  body: JSON.stringify({ source_id:sourceId, run_type:'FULL', status:'RUNNING', consult_date:data.consultDate, articles_found:data.totalArticles, metadata:{ trigger:'n8n', workflow:'05-ingest-cc-idcc-2378' } }),\n  returnFullResponse:false });\nconst runId = Array.isArray(runResp)?runResp[0].id:runResp.id;\nreturn [{ json:{ sourceId, runId, articles:data.articles, totalArticles:data.totalArticles, consultDate:data.consultDate } }];"
+      },
+      "id": "f688490b-d944-4d3e-a01b-eb04473f170f",
+      "name": "Ensure Source + Run1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14800,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst { sourceId, runId, articles, consultDate } = data;\nconst BATCH_SIZE = 50; let upserted=0, errors=0;\nfor (let i=0;i<articles.length;i+=BATCH_SIZE){\n  const batch = articles.slice(i,i+BATCH_SIZE).map(a=>({\n    source_id:sourceId, legifrance_id:a.legifrance_id, legifrance_cid:a.legifrance_cid, num:a.num,\n    content_html:a.content_html, content_text:a.content_text, nota:a.nota||null, etat:a.etat,\n    date_debut: (a.date_debut ? (typeof a.date_debut==='number' ? new Date(a.date_debut).toISOString().split('T')[0] : String(a.date_debut).split('T')[0]) : null),\n    section_path:a.section_path, container_title:a.container_title||null, consult_date:consultDate, ingestion_run_id:runId }));\n  try {\n    await this.helpers.httpRequest({ method:'POST', url:`${supabaseUrl}/rest/v1/legal_articles?on_conflict=source_id,legifrance_id`,\n      headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},\n      body: JSON.stringify(batch), returnFullResponse:false });\n    upserted += batch.length;\n  } catch(err){ errors += batch.length; console.log('Supabase batch error:', err.message); }\n}\nconst status = errors===0?'SUCCESS':(upserted>0?'PARTIAL':'FAILED');\nawait this.helpers.httpRequest({ method:'PATCH', url:`${supabaseUrl}/rest/v1/ingestion_runs?id=eq.${runId}`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json'},\n  body: JSON.stringify({ status, completed_at:new Date().toISOString(), articles_upserted:upserted, error_message: errors>0?(errors+' articles en erreur'):null }), returnFullResponse:false });\n\n\n\n\n// Péremption DOUCE : marque PERIME les articles de cette source non revus depuis > 30 jours.\n// Grâce de 30j = un conteneur manqué ponctuellement (timeout) ne périme PAS à tort ;\n// il faut ~4 runs hebdo consécutifs sans le voir pour le considérer disparu.\nlet perimed = 0;\ntry {\n  const cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];\n  const perResp = await this.helpers.httpRequest({ method: 'PATCH',\n    url: `${supabaseUrl}/rest/v1/legal_articles?source_id=eq.${sourceId}&consult_date=lt.${cutoff}&etat=like.VIGUEUR*`,\n    headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },\n    body: JSON.stringify({ etat: 'PERIME' }), returnFullResponse: false });\n  perimed = Array.isArray(perResp) ? perResp.length : 0;\n} catch (e) { console.log('Perime step error:', e.message); }\n\nreturn [{ json:{ success:true, status, articlesUpserted: upserted, articlesPerimed: perimed, articlesErrors:errors, consultDate } }];"
+      },
+      "id": "533b1f73-8549-4b4a-9de2-6d14dd1fa29a",
+      "name": "Upsert Supabase (batch)1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14576,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                3
+              ],
+              "triggerAtHour": 5
+            }
+          ]
+        }
+      },
+      "id": "bd57548f-c695-473c-aaac-01c1c7cd5908",
+      "name": "Hebdomadaire (lundi 5h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -15696,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Genere 1 item par requete de recherche (aucun appel HTTP ici)\nconst QUERIES = [\n  'requalification CDI interim mission temporaire',\n  'succession missions travail temporaire requalification',\n  'motif recours travail temporaire accroissement activite',\n  'remplacement salarie absent interim',\n  'delai carence mission interimaire',\n  'egalite traitement salarie interimaire entreprise utilisatrice',\n  'remuneration interimaire egalite',\n  'responsabilite entreprise utilisatrice accident travail interimaire',\n  'faute inexcusable employeur interim',\n  'indemnite fin mission precarite interim',\n  'rupture anticipee mission temporaire',\n  'contrat mise disposition travail temporaire mentions obligatoires',\n  'pret main oeuvre illicite interim',\n  'periode essai mission interimaire',\n  'formation securite interimaire obligation',\n];\nreturn QUERIES.map(q => ({ json: { query: q } }));"
+      },
+      "id": "ee98363f-17a5-4587-80a6-e9df39f35722",
+      "name": "Générer requêtes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15472,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ fond: 'JURI', recherche: { champs: [{ typeChamp: 'ALL', criteres: [{ valeur: $json.query, operateur: 'ET', typeRecherche: 'TOUS_LES_MOTS_DANS_UN_CHAMP' }], operateur: 'ET' }], filtres: [], pageNumber: 1, pageSize: 100, operateur: 'ET', sort: 'PERTINENCE', typePagination: 'DEFAUT' } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "852ff486-2e45-46b4-bbe1-8d91bcb5269d",
+      "name": "Search JURI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -15248,
+        1808
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "oAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrege toutes les reponses de recherche, dedup les IDs -> 1 item par decision\nconst items = $input.all();\nconst seen = new Set();\nconst out = [];\nfor (const it of items) {\n  const body = it.json.body || it.json;\n  const results = (body && body.results) || [];\n  for (const r of results) {\n    const id = r.titles && r.titles[0] && r.titles[0].id;\n    if (!id || seen.has(id)) continue;\n    seen.add(id);\n    out.push({ json: { textId: id } });\n  }\n}\nreturn out;"
+      },
+      "id": "471b842f-2f58-4b15-bacb-6c35c36fd54f",
+      "name": "Collecter IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15024,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/consult/juri",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ textId: $json.textId }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 20,
+              "batchInterval": 500
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "8944a5d1-1002-4342-ab2f-efcecee4af3e",
+      "name": "Consult JURI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -14800,
+        1808
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "oAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transforme chaque reponse /consult/juri en ligne Supabase\nconst items = $input.all();\nconst today = new Date().toISOString().split('T')[0];\nfunction toStr(v){ return v==null?'':(typeof v==='string'?v:String(v)); }\nfunction stripHtml(h){ return toStr(h).replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/gi,' ').replace(/\\s+/g,' ').trim(); }\nfunction epoch(e){ if(!e) return null; return new Date(e).toISOString().split('T')[0]; }\nconst decisions = [];\nfor (const it of items) {\n  const body = it.json.body || it.json;\n  const d = body && body.text;\n  if (!d || !d.id) continue;\n  decisions.push({\n    legifrance_id: d.id,\n    titre: toStr(d.titre),\n    titre_long: toStr(d.titreLong),\n    juridiction: toStr(d.juridiction),\n    formation: toStr(d.formation),\n    solution: toStr(d.solution),\n    nature_decision: toStr(d.nature),\n    numero_affaire: d.numeroAffaire || [],\n    date_decision: epoch(d.dateTexte),\n    date_decision_ms: d.dateTexte || null,\n    publication_recueil: toStr(d.publicationRecueil),\n    ecli: toStr(d.ecli),\n    texte_html: toStr(d.texteHtml),\n    texte_text: stripHtml(d.texteHtml || d.texte || ''),\n    sommaire: stripHtml(d.sommaire),\n    visas: stripHtml(d.visas),\n    decision_attaquee: d.decisionAttaquee ? (d.decisionAttaquee.formation || '') : '',\n    fond: 'JURI',\n    consult_date: today\n  });\n}\nreturn [{ json: { decisions, totalFetched: decisions.length, consultDate: today } }];"
+      },
+      "id": "11c0c764-a57a-4d8b-827e-989ec3f5fdb6",
+      "name": "Formater décisions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14576,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst sourceResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/legal_sources?on_conflict=source_type,legifrance_id`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},\n  body: JSON.stringify({ source_type:'JURISPRUDENCE', legifrance_id:'JURI_INTERIM', title:'Jurisprudence Cour de cassation - Travail temporaire / Interim', metadata:{ fond:'JURI', formation_principale:'CHAMBRE_SOCIALE' } }),\n  returnFullResponse:false });\nconst sourceId = Array.isArray(sourceResp)?sourceResp[0].id:sourceResp.id;\nconst runResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/ingestion_runs`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'return=representation'},\n  body: JSON.stringify({ source_id:sourceId, run_type:'FULL', status:'RUNNING', consult_date:data.consultDate, articles_found:data.totalFetched, metadata:{ trigger:'n8n', workflow:'06-ingest-jurisprudence' } }),\n  returnFullResponse:false });\nconst runId = Array.isArray(runResp)?runResp[0].id:runResp.id;\nreturn [{ json:{ sourceId, runId, decisions:data.decisions, totalFetched:data.totalFetched, consultDate:data.consultDate } }];"
+      },
+      "id": "e2bdb9ee-10b9-4022-ac70-77569e613b26",
+      "name": "Ensure Source + Run2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14352,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst { sourceId, runId, decisions, consultDate } = data;\nconst BATCH_SIZE = 25; let upserted=0, errors=0;\nfor (let i=0;i<decisions.length;i+=BATCH_SIZE){\n  const batch = decisions.slice(i,i+BATCH_SIZE).map(d=>({\n    source_id:sourceId, legifrance_id:d.legifrance_id, ecli:d.ecli||null, titre:d.titre, titre_long:d.titre_long||null,\n    juridiction:d.juridiction, formation:d.formation||null, solution:d.solution||null, nature_decision:d.nature_decision||null,\n    numero_affaire:d.numero_affaire||[], date_decision:d.date_decision||null, date_decision_ms:d.date_decision_ms||null,\n    publication_recueil:d.publication_recueil||null, texte_html:d.texte_html, texte_text:d.texte_text,\n    sommaire:d.sommaire||null, visas:d.visas||null, decision_attaquee:d.decision_attaquee||null, fond:d.fond,\n    consult_date:consultDate, ingestion_run_id:runId }));\n  try {\n    await this.helpers.httpRequest({ method:'POST', url:`${supabaseUrl}/rest/v1/legal_decisions?on_conflict=fond,legifrance_id`,\n      headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},\n      body: JSON.stringify(batch), returnFullResponse:false });\n    upserted += batch.length;\n  } catch(err){ errors += batch.length; console.log('Supabase batch error:', err.message); }\n}\nconst status = errors===0?'SUCCESS':(upserted>0?'PARTIAL':'FAILED');\nawait this.helpers.httpRequest({ method:'PATCH', url:`${supabaseUrl}/rest/v1/ingestion_runs?id=eq.${runId}`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json'},\n  body: JSON.stringify({ status, completed_at:new Date().toISOString(), articles_upserted:upserted, error_message: errors>0?(errors+' decisions en erreur'):null }), returnFullResponse:false });\nreturn [{ json:{ success:true, status, decisionsUpserted:upserted, decisionsErrors:errors, consultDate } }];"
+      },
+      "id": "1d09399e-6c79-4fb1-b45f-d3031230b71e",
+      "name": "Upsert Supabase (batch)2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14128,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                4
+              ],
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "697f5c5e-d64a-4e42-b006-2ec948dd71f6",
+      "name": "Hebdomadaire (lundi 6h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -15696,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/consult/code",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ textId: 'LEGITEXT000006072050', date: new Date().toISOString().split('T')[0], sctCid: 'LEGISCTA000018483391' }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "a748ae87-17d4-48f9-91e4-4b3f0e7cd884",
+      "name": "GET Titre V réglementaire",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -15472,
+        2032
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "oAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrait les articles de la section consultee (Titre V reglementaire)\nconst resp = $input.first().json;\nconst body = resp.body || resp;\nconst sections = body.sections || [];\nconst today = new Date().toISOString().split('T')[0];\nfunction stripHtml(h){ return (h||'').replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/gi,' ').replace(/\\s+/g,' ').trim(); }\nfunction findConsultee(secs){ for(const s of secs){ if(s.sectionConsultee) return s; if(s.sections){ const f=findConsultee(s.sections); if(f) return f; } } return null; }\nfunction collect(section, path){\n  path = path || [];\n  const cur = [...path, (section.title||'').trim()];\n  const out = [];\n  if (section.articles){\n    for (const a of section.articles){\n      if (a.content && a.etat && a.etat.startsWith('VIGUEUR')){\n        out.push({ legifrance_id:a.id, legifrance_cid:a.cid||'', num:a.num||'', etat:a.etat,\n          content_html:a.content, content_text:stripHtml(a.content), nota:a.nota||'',\n          date_debut:a.dateDebut||null, section_path:cur, container_title:null,\n          consult_date:today, source_type:'CODE', source_legifrance_id:'LEGITEXT000006072050' });\n      }\n    }\n  }\n  if (section.sections) for (const sub of section.sections) out.push(...collect(sub, cur));\n  return out;\n}\nconst consultee = findConsultee(sections);\nconst articles = consultee ? collect(consultee) : [];\nreturn [{ json: {\n  sectionTitle: consultee ? (consultee.title||'').trim() : 'Titre V reglementaire (R/D)',\n  totalArticles: articles.length, consultDate: today, articles\n} }];"
+      },
+      "id": "0ef00627-9206-469f-a3b9-65193700c821",
+      "name": "Extraire Articles (R/D)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15248,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst sourceResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/legal_sources?on_conflict=source_type,legifrance_id`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},\n  body: JSON.stringify({ source_type:'CODE', legifrance_id:'LEGITEXT000006072050_REGL', title:'Code du travail - Titre V reglementaire (R/D - Travail temporaire)', metadata:{ sctCid:\"LEGISCTA000018483391\", partie:'reglementaire' } }),\n  returnFullResponse:false });\nconst sourceId = Array.isArray(sourceResp)?sourceResp[0].id:sourceResp.id;\nconst runResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/ingestion_runs`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'return=representation'},\n  body: JSON.stringify({ source_id:sourceId, run_type:'FULL', status:'RUNNING', consult_date:data.consultDate, articles_found:data.totalArticles, metadata:{ trigger:'n8n', workflow:'07-ingest-code-travail-reglementaire' } }),\n  returnFullResponse:false });\nconst runId = Array.isArray(runResp)?runResp[0].id:runResp.id;\nreturn [{ json:{ sourceId, runId, articles:data.articles, totalArticles:data.totalArticles, consultDate:data.consultDate } }];"
+      },
+      "id": "e6ebc9ab-cec2-4c27-a85e-e8ab91d1b944",
+      "name": "Ensure Source + Run3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15024,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst { sourceId, runId, articles, consultDate } = data;\nconst BATCH_SIZE = 50; let upserted=0, errors=0;\nfor (let i=0;i<articles.length;i+=BATCH_SIZE){\n  const batch = articles.slice(i,i+BATCH_SIZE).map(a=>({\n    source_id:sourceId, legifrance_id:a.legifrance_id, legifrance_cid:a.legifrance_cid, num:a.num,\n    content_html:a.content_html, content_text:a.content_text, nota:a.nota||null, etat:a.etat,\n    date_debut: (a.date_debut ? (typeof a.date_debut==='number' ? new Date(a.date_debut).toISOString().split('T')[0] : String(a.date_debut).split('T')[0]) : null),\n    section_path:a.section_path, container_title:a.container_title||null, consult_date:consultDate, ingestion_run_id:runId }));\n  try {\n    await this.helpers.httpRequest({ method:'POST', url:`${supabaseUrl}/rest/v1/legal_articles?on_conflict=source_id,legifrance_id`,\n      headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},\n      body: JSON.stringify(batch), returnFullResponse:false });\n    upserted += batch.length;\n  } catch(err){ errors += batch.length; console.log('Supabase batch error:', err.message); }\n}\nconst status = errors===0?'SUCCESS':(upserted>0?'PARTIAL':'FAILED');\nawait this.helpers.httpRequest({ method:'PATCH', url:`${supabaseUrl}/rest/v1/ingestion_runs?id=eq.${runId}`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json'},\n  body: JSON.stringify({ status, completed_at:new Date().toISOString(), articles_upserted:upserted, error_message: errors>0?(errors+' articles en erreur'):null }), returnFullResponse:false });\n\n\n\n\n// Marquer PERIME les articles de cette source NON revus dans ce run (disparus de Legifrance)\nlet perimed = 0;\nconst cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];\ntry {\n  const perResp = await this.helpers.httpRequest({ method: 'PATCH',\n    url: `${supabaseUrl}/rest/v1/legal_articles?source_id=eq.${sourceId}&consult_date=lt.${cutoff}&etat=like.VIGUEUR*`,\n    headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },\n    body: JSON.stringify({ etat: 'PERIME' }), returnFullResponse: false });\n  perimed = Array.isArray(perResp) ? perResp.length : 0;\n} catch (e) { console.log('Perime step error:', e.message); }\n\nreturn [{ json:{ success:true, status, articlesUpserted: upserted, articlesPerimed: perimed, articlesErrors:errors, consultDate } }];"
+      },
+      "id": "a1edaf1a-1261-478a-8e73-d54c322363f9",
+      "name": "Upsert Supabase (batch)3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14800,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 2,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "id": "d790da0a-17b5-4534-beae-27ef4cdb0d70",
+      "name": "Bimensuel (mardi 3h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -15696,
+        2256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Genere 1 item par page a recuperer (filtre IDCC 2378, pageSize 100)\nreturn [1,2,3,4].map(p => ({ json: { page: p } }));"
+      },
+      "id": "8fe93d49-ab02-4b21-8e2d-bd861e7adb1b",
+      "name": "Générer pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15472,
+        2256
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ fond: 'ACCO', recherche: { champs: [{ typeChamp: 'ALL', criteres: [{ valeur: 'travail temporaire', operateur: 'ET', typeRecherche: 'UN_DES_MOTS' }], operateur: 'ET' }], filtres: [{ facette: 'IDCC', valeurs: ['2378'] }], pageNumber: $json.page, pageSize: 100, operateur: 'ET', sort: 'PERTINENCE', typePagination: 'DEFAUT' } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "6f696047-79c8-44c4-a89a-20e714619107",
+      "name": "Search ACCO (IDCC 2378)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -15248,
+        2256
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "oAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrege toutes les pages ACCO (filtre IDCC 2378), dedup\nconst items = $input.all();\nconst today = new Date().toISOString().split('T')[0];\nfunction stripHtml(h){ return String(h||'').replace(/<[^>]+>/g,' ').replace(/<mark>/gi,'').replace(/&[a-z]+;/gi,' ').replace(/\\s+/g,' ').trim(); }\nconst seen = new Set();\nconst accords = [];\nfor (const it of items) {\n  const body = it.json.body || it.json;\n  const results = (body && body.results) || [];\n  for (const r of results) {\n    const id = r.titles && r.titles[0] && r.titles[0].id;\n    if (!id || seen.has(id)) continue;\n    seen.add(id);\n    accords.push({ legifrance_id:id, titre:stripHtml(r.titles[0].title||''), texte_excerpt:stripHtml(r.text||'').substring(0,5000), nature:r.nature||'', idcc:r.idcc||'2378', consult_date:today });\n  }\n}\nreturn [{ json: { accords, totalAccords: accords.length, consultDate: today } }];"
+      },
+      "id": "80e106b8-9425-4d51-8901-6e27163842f4",
+      "name": "Extraire accords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15024,
+        2256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst sourceResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/legal_sources?on_conflict=source_type,legifrance_id`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},\n  body: JSON.stringify({ source_type:'ACCORD', legifrance_id:'ACCO_INTERIM_2378', title:'Accords de branche - Travail temporaire / IDCC 2378', idcc:'2378', metadata:{ fond:'ACCO' } }),\n  returnFullResponse:false });\nconst sourceId = Array.isArray(sourceResp)?sourceResp[0].id:sourceResp.id;\nconst runResp = await this.helpers.httpRequest({\n  method:'POST', url:`${supabaseUrl}/rest/v1/ingestion_runs`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'return=representation'},\n  body: JSON.stringify({ source_id:sourceId, run_type:'FULL', status:'RUNNING', consult_date:data.consultDate, articles_found:data.totalAccords, metadata:{ trigger:'n8n', workflow:'08-ingest-accords-branche' } }),\n  returnFullResponse:false });\nconst runId = Array.isArray(runResp)?runResp[0].id:runResp.id;\nreturn [{ json:{ sourceId, runId, accords:data.accords, totalAccords:data.totalAccords, consultDate:data.consultDate } }];"
+      },
+      "id": "e440a4c0-4f31-475c-bb47-83696de0a114",
+      "name": "Ensure Source + Run4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14800,
+        2256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supabaseUrl = \"https://hgczhihoauceapvteahz.supabase.co\";\nconst serviceKey = \"JWT_REMPLACER\";\nconst data = $input.first().json;\nconst { sourceId, runId, accords, consultDate } = data;\nconst BATCH_SIZE = 50; let upserted=0, errors=0;\nfor (let i=0;i<accords.length;i+=BATCH_SIZE){\n  const batch = accords.slice(i,i+BATCH_SIZE).map(a=>({\n    source_id:sourceId, legifrance_id:a.legifrance_id, num:(a.titre||'').substring(0,200),\n    content_html:a.texte_excerpt, content_text:a.texte_excerpt, nota:null, etat:'VIGUEUR',\n    section_path:[a.nature||'Accord'], container_title:a.titre, consult_date:consultDate, ingestion_run_id:runId }));\n  try {\n    await this.helpers.httpRequest({ method:'POST', url:`${supabaseUrl}/rest/v1/legal_articles?on_conflict=source_id,legifrance_id`,\n      headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},\n      body: JSON.stringify(batch), returnFullResponse:false });\n    upserted += batch.length;\n  } catch(err){ errors += batch.length; console.log('Supabase batch error:', err.message); }\n}\nconst status = errors===0?'SUCCESS':(upserted>0?'PARTIAL':'FAILED');\nawait this.helpers.httpRequest({ method:'PATCH', url:`${supabaseUrl}/rest/v1/ingestion_runs?id=eq.${runId}`,\n  headers:{'Authorization':`Bearer ${serviceKey}`,'apikey':serviceKey,'Content-Type':'application/json'},\n  body: JSON.stringify({ status, completed_at:new Date().toISOString(), articles_upserted:upserted, error_message: errors>0?(errors+' accords en erreur'):null }), returnFullResponse:false });\n// Marquer PERIME les accords de cette source NON revus dans ce run (retires de la branche)\n// Sur en 08 car recherche EXHAUSTIVE par facette IDCC (inventaire complet).\nlet perimed = 0;\nconst cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];\ntry {\n  const perResp = await this.helpers.httpRequest({ method: 'PATCH',\n    url: `${supabaseUrl}/rest/v1/legal_articles?source_id=eq.${sourceId}&consult_date=lt.${cutoff}&etat=like.VIGUEUR*`,\n    headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },\n    body: JSON.stringify({ etat: 'PERIME' }), returnFullResponse: false });\n  perimed = Array.isArray(perResp) ? perResp.length : 0;\n} catch (e) { console.log('Perime step error:', e.message); }\nreturn [{ json:{ success:true, status, accordsUpserted:upserted, accordsPerimed:perimed, accordsErrors:errors, consultDate } }];"
+      },
+      "id": "bc9d0a53-b503-4c34-bd37-b1f439d50722",
+      "name": "Upsert Supabase (batch)4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14576,
+        2256
+      ]
+    }
+  ],
+  "connections": {
+    "Hebdomadaire (lundi 3h)": {
+      "main": [
+        [
+          {
+            "node": "GET Titre V (Code travail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Titre V (Code travail)": {
+      "main": [
+        [
+          {
+            "node": "Fetch OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OK?": {
+      "main": [
+        [
+          {
+            "node": "Extract Articles",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Articles": {
+      "main": [
+        [
+          {
+            "node": "Ensure Source + Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Source + Run": {
+      "main": [
+        [
+          {
+            "node": "Upsert Supabase (batch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hebdomadaire (lundi 4h)": {
+      "main": [
+        [
+          {
+            "node": "Générer conteneurs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Générer conteneurs": {
+      "main": [
+        [
+          {
+            "node": "Consult kaliCont",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consult kaliCont": {
+      "main": [
+        [
+          {
+            "node": "Extraire articles CC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire articles CC": {
+      "main": [
+        [
+          {
+            "node": "Ensure Source + Run1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Source + Run1": {
+      "main": [
+        [
+          {
+            "node": "Upsert Supabase (batch)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hebdomadaire (lundi 5h)": {
+      "main": [
+        [
+          {
+            "node": "Générer requêtes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Générer requêtes": {
+      "main": [
+        [
+          {
+            "node": "Search JURI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search JURI": {
+      "main": [
+        [
+          {
+            "node": "Collecter IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collecter IDs": {
+      "main": [
+        [
+          {
+            "node": "Consult JURI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consult JURI": {
+      "main": [
+        [
+          {
+            "node": "Formater décisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formater décisions": {
+      "main": [
+        [
+          {
+            "node": "Ensure Source + Run2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Source + Run2": {
+      "main": [
+        [
+          {
+            "node": "Upsert Supabase (batch)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hebdomadaire (lundi 6h)": {
+      "main": [
+        [
+          {
+            "node": "GET Titre V réglementaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Titre V réglementaire": {
+      "main": [
+        [
+          {
+            "node": "Extraire Articles (R/D)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire Articles (R/D)": {
+      "main": [
+        [
+          {
+            "node": "Ensure Source + Run3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Source + Run3": {
+      "main": [
+        [
+          {
+            "node": "Upsert Supabase (batch)3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bimensuel (mardi 3h)": {
+      "main": [
+        [
+          {
+            "node": "Générer pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Générer pages": {
+      "main": [
+        [
+          {
+            "node": "Search ACCO (IDCC 2378)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search ACCO (IDCC 2378)": {
+      "main": [
+        [
+          {
+            "node": "Extraire accords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire accords": {
+      "main": [
+        [
+          {
+            "node": "Ensure Source + Run4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Source + Run4": {
+      "main": [
+        [
+          {
+            "node": "Upsert Supabase (batch)4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

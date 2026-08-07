@@ -1,0 +1,573 @@
+{
+  "name": "CRM — gabarits vierges DocuSeal (util)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "9335aef3-5b50-455e-90bf-a201bc07903d",
+      "name": "Webhook copie",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-gabarit-copie-dk39",
+        "responseMode": "responseNode"
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "25e364e9-42c7-42fe-8c52-e10d8f434b9d",
+      "name": "Copie gabarit",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.body.sourceDocId }}"
+        },
+        "name": "={{ $json.body.name }}",
+        "sameFolder": true
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "fdefaaaf-aa64-4878-961a-163e762911d4",
+      "name": "Partage lecture",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Copie gabarit').item.json.id }}"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone",
+            "allowFileDiscovery": false
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "c117a4d2-0999-48f9-885c-06bbcc665b26",
+      "name": "Répond copie",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ copyId: $('Copie gabarit').item.json.id }) }}"
+      }
+    },
+    {
+      "id": "4441a856-db5e-4b28-865c-9f249a23a9e1",
+      "name": "Webhook upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        224
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-gabarit-upload-dk39",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true,
+          "binaryPropertyName": "data"
+        }
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "df01c995-89b3-402e-933e-47f89302b1f0",
+      "name": "Répond upload",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        224
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ fileId: $('Upload PDF').item.json.id }) }}"
+      }
+    },
+    {
+      "id": "f457e3a8-580b-4321-8fef-01d27984d10f",
+      "name": "Webhook supprime",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        448
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-gabarit-supprime-dk39",
+        "responseMode": "responseNode"
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "21797c12-47fe-4380-894a-7a8c28c7bbe1",
+      "name": "Supprime copie",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        448
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "deleteFile",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.body.docId }}"
+        },
+        "options": {
+          "deletePermanently": true
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "200be468-4160-47f1-b631-36e588e3b538",
+      "name": "Répond supprime",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        448
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}"
+      }
+    },
+    {
+      "id": "4d9465cb-8815-486a-b63e-132e84edf495",
+      "name": "Upload PDF",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $json.query.name || 'gabarit-vierge.pdf' }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "0787712e-5b48-433f-bbc0-0f06286873c9",
+      "name": "Partage upload",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone",
+            "allowFileDiscovery": false
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "17e9fa54-76ca-455c-88d7-4193c3cd9ef0",
+      "name": "Webhook fichier",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        500
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "crm-gabarit-fichier-dk39/:fileId/:nom",
+        "responseMode": "responseNode"
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "8cff3a7d-ec01-4564-839d-5978d521ee07",
+      "name": "Télécharge fichier",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        460,
+        500
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.params.fileId }}"
+        },
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDriveOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "e6f24e46-1d60-4f2b-8940-21b9d3b5554a",
+      "name": "Répond fichier",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        680,
+        500
+      ],
+      "parameters": {
+        "respondWith": "binary",
+        "responseDataSource": "automatically"
+      }
+    },
+    {
+      "id": "047ef8be-2f32-4ee2-960a-95d0fae5d4a1",
+      "name": "Vide tokens gabarit",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        460,
+        700
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.body.docId }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "{{NOM}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{PRENOM}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{debut APMR}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{fin APMR}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{DEBUT APMR}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{FIN APMR}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{debut piste}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{fin piste}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{debut baguage}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{fin baguage}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{DEBUT}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{FIN}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{DUREE}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{IFT}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{CARIF}}",
+              "replaceText": "______________"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{DATE PREV}}",
+              "replaceText": "______________"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleDocsOAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "83016700-7210-4d60-b1dc-da8e2096c0a8",
+      "name": "Webhook blanchir",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        700
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-gabarit-blanchir-dk39",
+        "responseMode": "responseNode"
+      },
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "cbd35cf8-5453-4b9e-af52-34442a209498",
+      "name": "Répond blanchir",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        680,
+        700
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook copie": {
+      "main": [
+        [
+          {
+            "node": "Copie gabarit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Partage lecture": {
+      "main": [
+        [
+          {
+            "node": "Répond copie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook supprime": {
+      "main": [
+        [
+          {
+            "node": "Supprime copie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supprime copie": {
+      "main": [
+        [
+          {
+            "node": "Répond supprime",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook upload": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF": {
+      "main": [
+        [
+          {
+            "node": "Partage upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Partage upload": {
+      "main": [
+        [
+          {
+            "node": "Répond upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook fichier": {
+      "main": [
+        [
+          {
+            "node": "Télécharge fichier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Télécharge fichier": {
+      "main": [
+        [
+          {
+            "node": "Répond fichier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copie gabarit": {
+      "main": [
+        [
+          {
+            "node": "Partage lecture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook blanchir": {
+      "main": [
+        [
+          {
+            "node": "Vide tokens gabarit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vide tokens gabarit": {
+      "main": [
+        [
+          {
+            "node": "Répond blanchir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "tags": []
+}

@@ -1,0 +1,1039 @@
+{
+  "name": "4. Ecoute Gmail des reponses",
+  "active": false,
+  "nodes": [
+    {
+      "id": "420ea221-b7d2-481e-8759-4e83a542ed54",
+      "name": "📬 Gmail: nouveaux messages",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -2400,
+        0
+      ],
+      "parameters": {
+        "simple": false,
+        "maxResults": 10,
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "both",
+          "includeSpamTrash": false,
+          "includeDrafts": false,
+          "q": "-from:me -in:chats -in:drafts -category:promotions -category:social"
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Scrutation toutes les 15 min. simple=false pour recevoir les EN-TETES : c est la seule preuve non falsifiable d un accuse de reception automatique (RFC 3834). readStatus=both parce qu un courriel deja lu par Lineo reste une reponse a traiter."
+    },
+    {
+      "id": "d74d9c9d-e720-4f20-aa69-b4eae40d5798",
+      "name": "⚙️ Config WF4",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2176,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "w1",
+              "name": "careerOpsBase",
+              "value": "http://service.interne:3000",
+              "type": "string"
+            },
+            {
+              "id": "w2",
+              "name": "lineoEmail",
+              "value": "prenom.nom@exemple.fr",
+              "type": "string"
+            },
+            {
+              "id": "w3",
+              "name": "githubOwner",
+              "value": "Biribin",
+              "type": "string"
+            },
+            {
+              "id": "w4",
+              "name": "githubRepo",
+              "value": "cv",
+              "type": "string"
+            },
+            {
+              "id": "w5",
+              "name": "githubBaseBranch",
+              "value": "main",
+              "type": "string"
+            },
+            {
+              "id": "w6",
+              "name": "githubToken",
+              "value": "github_pat_REMPLACER",
+              "type": "string"
+            },
+            {
+              "id": "w7",
+              "name": "relanceSeuilJoursRepli",
+              "value": 7,
+              "type": "number"
+            },
+            {
+              "id": "w8",
+              "name": "relanceMaxRepli",
+              "value": 2,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "relanceSeuilJoursRepli / relanceMaxRepli sont des valeurs de REPLI. La cadence qui fait loi vient de career-ops, /api/followups?full=1."
+    },
+    {
+      "id": "3bcf45b4-3fc4-4059-a4ed-c7179bafef93",
+      "name": "🧩 Messages: normaliser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1952,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Deux entrees possibles : la scrutation Gmail, ou la porte de rejeu. On lit\n// donc les declencheurs par leur NOM, et on tolere que l'un des deux n'ait pas\n// tourne : $('...') sur un noeud non execute leve, d'ou le try/catch.\n// Rappel du piege : dans un noeud Code, $json est la sortie du PREDECESSEUR\n// immediat (ici Config), pas celle du declencheur.\nconst lire = (nom) => { try { return $(nom).all(); } catch (e) { return []; } };\nconst msgs = [...lire('📬 Gmail: nouveaux messages'), ...lire('📥 Gmail: messages a rejouer')];\nconst cfg = $('⚙️ Config WF4').first().json;\nconst moi = String(cfg.lineoEmail || '').trim().toLowerCase();\n\nconst sansAccents = (v) => String(v || '')\n  .normalize('NFD').replace(/\\p{Diacritic}/gu, '').toLowerCase();\n\nconst texteDe = (m) => {\n  const t = String(m.text || '');\n  if (t.trim()) return t;\n  const h = String(m.html || m.textAsHtml || '');\n  return h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');\n};\n\n// ── Preuves TECHNIQUES d un envoi automatique ────────────────────────────\n// RFC 3834 pour Auto-Submitted, plus les en-tetes de fait des repondeurs.\n// Un en-tete ne se trompe pas sur son propre compte : c est ce qui permettra\n// de verrouiller le verdict « accuse de reception » contre le classificateur.\nconst ENTETES_AUTO = ['x-autoreply', 'x-autorespond', 'x-autoresponse', 'x-auto-response-suppress'];\nconst PHRASES_AUTO = [\n  'reponse automatique', 'message automatique', 'ceci est un message automatique',\n  'ne pas repondre a ce message', 'merci de ne pas repondre', 'ne repondez pas a ce message',\n  'absence du bureau', 'je suis actuellement absent', 'suis absent du bureau',\n  'out of office', 'automatic reply', 'auto-reply', 'autoreply', 'do not reply to this message',\n];\n// Accuse « doux » : la reception est confirmee, rien de plus. Il ne tranche PAS\n// seul, parce quun refus commence souvent par « nous avons bien recu votre\n// candidature ». Il ne sert que de repli si le classificateur est muet.\nconst PHRASES_ACCUSE = [\n  'accuse de reception', 'nous avons bien recu', 'nous avons bien receptionne',\n  'votre candidature a bien ete recue', 'votre candidature a ete recue',\n  'candidature bien recue', 'nous confirmons la reception', 'nous accusons reception',\n  'we have received your application', 'thank you for applying', 'application received',\n  'your application has been received',\n];\nconst PHRASES_REFUS = [\n  'ne donnons pas suite', 'ne donnerons pas suite', 'ne pas donner suite',\n  'na pas ete retenue', 'navons pas retenu', 'ne retenons pas votre candidature',\n  'ne correspond pas au profil', 'ne correspond pas a nos besoins',\n  'poste a ete pourvu', 'offre est pourvue', 'processus est clos', 'nous regrettons',\n  'malheureusement', 'unfortunately', 'not a match', 'will not be moving forward',\n  'position has been filled',\n];\nconst PHRASES_ENTRETIEN = [\n  'entretien', 'vous rencontrer', 'echange telephonique', 'un premier echange',\n  'vos disponibilites', 'etes vous disponible', 'convenir dun creneau',\n  'planifier un appel', 'en visio', 'interview', 'phone screen', 'schedule a call',\n];\n\nconst sortie = [];\nconst vus = new Set();\nfor (const it of msgs) {\n  const m = it.json ?? {};\n  const id = String(m.id ?? '');\n  // Rejeu et scrutation peuvent ramener le meme message : on ne le traite quune fois.\n  if (!id || vus.has(id)) continue;\n  vus.add(id);\n\n  const entetes = {};\n  for (const [k, v] of Object.entries(m.headers ?? {})) entetes[String(k).toLowerCase()] = String(v ?? '');\n\n  const expediteur = String(m.from?.value?.[0]?.address ?? '').trim().toLowerCase();\n  const local = expediteur.split('@')[0] || '';\n  const domaine = expediteur.split('@')[1] || '';\n\n  // Un message de Lineo lui-meme nest jamais une reponse de recruteur : ni ses\n  // propres candidatures, ni ses relances, ni les notifications de ce workflow.\n  if (!expediteur || (moi && expediteur === moi)) continue;\n\n  const objet = String(m.subject ?? '');\n  const corps = texteDe(m).slice(0, 4000);\n  const plat = sansAccents(objet + ' | ' + corps);\n\n  const preuves = [];\n  const auto = entetes['auto-submitted'] || '';\n  if (auto && auto.toLowerCase() !== 'no') preuves.push('Auto-Submitted: ' + auto);\n  for (const h of ENTETES_AUTO) if (entetes[h]) preuves.push(h + ': ' + entetes[h]);\n  const prec = (entetes['precedence'] || '').toLowerCase();\n  if (prec === 'bulk' || prec === 'auto_reply' || prec === 'junk' || prec === 'list') preuves.push('Precedence: ' + prec);\n  if (/^(no-?reply|noreply|donotreply|do-not-reply|ne-?pas-?repondre|nepasrepondre|mailer-daemon|postmaster|notifications?|automat)/.test(local)) {\n    preuves.push('expediteur technique : ' + local);\n  }\n  for (const p of PHRASES_AUTO) if (plat.includes(p)) preuves.push('formule de repondeur : ' + p);\n\n  sortie.push({\n    json: {\n      messageId: id,\n      filGmail: String(m.threadId ?? ''),\n      expediteur,\n      expediteurNom: String(m.from?.value?.[0]?.name ?? '').trim(),\n      expediteurDomaine: domaine,\n      objet,\n      recuLe: String(m.date ?? entetes['date'] ?? ''),\n      corps,\n      extrait: corps.replace(/\\s+/g, ' ').trim().slice(0, 900),\n      accuseTechnique: preuves.length > 0,\n      preuvesTechniques: preuves,\n      accuseDoux: PHRASES_ACCUSE.filter((p) => plat.includes(p)),\n      indicesRefus: PHRASES_REFUS.filter((p) => plat.includes(p)),\n      indicesEntretien: PHRASES_ENTRETIEN.filter((p) => plat.includes(p)),\n      lienGmail: 'https://mail.google.com/mail/u/0/#all/' + String(m.threadId ?? ''),\n    },\n  });\n}\n\n// Zero message a traiter est letat NORMAL dune scrutation : la chaine sarrete\n// la, le prochain passage reprendra. Rien a signaler, rien a inventer.\nreturn sortie;"
+      },
+      "notes": "Le declencheur est lu par son NOM : le predecesseur immediat est Config, pas Gmail. Calcule ici les PREUVES TECHNIQUES d accuse de reception (en-tetes, expediteur no-reply, formule de repondeur) : elles seront verrouillees plus loin, le classificateur ne pourra pas les renverser."
+    },
+    {
+      "id": "3b19901b-82e7-4282-a2ce-66bd77bd3a53",
+      "name": "🧩 Bilan de la scrutation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        -240
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Le detail des decisions est dans les courriels de notification et dans le\n// journal de lexecution : ce noeud ne recalcule rien, il clot la tournee.\nconst examines = $('🧩 Messages: normaliser').all().length;\nreturn [{ json: { schema: 'wf4-bilan/v1', messages_examines: examines, termine_le: new Date().toISOString() } }];"
+      },
+      "notes": "Ne compte que ce quil sait vraiment : le nombre de messages examines. Les compteurs par iteration ne se relisent pas de facon fiable depuis lexterieur dune boucle, et un chiffre faux serait pire que pas de chiffre."
+    },
+    {
+      "id": "be1f1e22-6c9b-4079-972c-35ea86fd5a1b",
+      "name": "🐘 Postgres: apparier la candidature",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1504,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH m AS (SELECT $1::jsonb AS d),\np AS (\n  SELECT NULLIF(btrim(d->>'threadId'), '')                 AS fil,\n         lower(NULLIF(btrim(d->>'expediteur'), ''))        AS expediteur,\n         lower(NULLIF(btrim(d->>'expediteurDomaine'), '')) AS domaine,\n         lower(COALESCE(d->>'objet', ''))                  AS objet\n  FROM m\n),\ncand AS (\n  SELECT c.id, o.entreprise, o.poste, o.courriel_contact, o.url,\n         c.branche_github, c.envoyee_le, c.message_id, c.fil_gmail,\n         CASE\n           WHEN p.fil IS NOT NULL AND (c.fil_gmail = p.fil OR c.message_id = p.fil) THEN 1\n           WHEN p.expediteur IS NOT NULL AND lower(btrim(o.courriel_contact)) = p.expediteur THEN 2\n           WHEN p.domaine IS NOT NULL AND split_part(lower(btrim(o.courriel_contact)), '@', 2) = p.domaine THEN 3\n           WHEN length(btrim(o.entreprise)) >= 3 AND position(lower(btrim(o.entreprise)) in p.objet) > 0 THEN 4\n           ELSE NULL\n         END AS rang\n  FROM career_ops.candidature c\n  JOIN career_ops.offre o ON o.id = c.offre_id\n  CROSS JOIN p\n  WHERE c.envoyee_le IS NOT NULL\n),\nretenue AS (\n  SELECT * FROM cand WHERE rang IS NOT NULL ORDER BY rang, envoyee_le DESC LIMIT 1\n)\nSELECT (SELECT id FROM retenue)               AS candidature_id,\n       (SELECT entreprise FROM retenue)       AS entreprise,\n       (SELECT poste FROM retenue)            AS poste,\n       (SELECT courriel_contact FROM retenue) AS courriel_contact,\n       (SELECT url FROM retenue)              AS url_offre,\n       (SELECT branche_github FROM retenue)   AS branche_github,\n       (SELECT envoyee_le FROM retenue)       AS envoyee_le,\n       (SELECT CASE rang WHEN 1 THEN 'fil Gmail' WHEN 2 THEN 'courriel du contact' WHEN 3 THEN 'domaine du contact' WHEN 4 THEN 'entreprise dans lobjet' END FROM retenue) AS indice,\n       (SELECT count(*) FROM cand WHERE rang IS NOT NULL) AS candidats",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [JSON.stringify({ threadId: $json.filGmail, expediteur: $json.expediteur, expediteurDomaine: $json.expediteurDomaine, objet: $json.objet })] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "A_RECONNECTER",
+          "name": "postgres (a reconnecter)"
+        }
+      },
+      "notes": "Quatre indices, du plus fiable au moins fiable : le fil Gmail (candidature.fil_gmail, ou message_id qui vaut threadId pour un fil ouvert par nous), ladresse exacte du contact, le domaine de ladresse, puis le nom de lentreprise dans lobjet. Rend TOUJOURS une ligne, candidature_id a NULL si rien ne correspond : un noeud Postgres a zero ligne couperait la chaine et le message serait perdu en silence.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a2e774ac-6877-4c5e-9546-05c1fbe5347d",
+      "name": "🔀 Rattache a une candidature ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1280,
+        160
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "a1",
+              "leftValue": "={{ !!$json.candidature_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "notes": "Non rattache = on ne touche a rien et on passe au message suivant. Ce workflow ne doit pas ecrire un statut sur une candidature quil na pas identifiee."
+    },
+    {
+      "id": "d307cf04-27cc-4d76-b4aa-daddaa321143",
+      "name": "🌐 career-ops: cadence et tracker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1056,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('⚙️ Config WF4').first().json.careerOpsBase }}/api/followups?full=1",
+        "options": {
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "notes": "Sert a DEUX choses : la cadence de relance (cadenceConfig, jamais codee en dur) et surtout lentreprise/poste tels que le TRACKER les ecrit — cest depuis eux que WF3 calcule la cle relanceId. La calculer depuis Postgres seul ferait ecrire larret a cote du fichier que WF3 relit.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "0b1c55db-3b4a-4988-91a0-a8d30c83c732",
+      "name": "🧩 Reponse: contexte et cle de relance",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const cfg = $('⚙️ Config WF4').first().json;\nconst msg = $('🔁 Boucle messages').first().json;\nconst app = $('🐘 Postgres: apparier la candidature').first().json;\nconst rep = $input.first().json ?? {};\n\n// Le slug de WF3, au caractere pres. Le copier est volontaire : cest un\n// CONTRAT entre deux workflows, pas une commodite locale.\nconst slug = (v) => String(v || '')\n  .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '-')\n  .replace(/^-+|-+$/g, '').slice(0, 40);\nconst aplati = (v) => String(v || '')\n  .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\n\n// ── Cadence : la config career-ops fait loi, les valeurs de Config sont un repli\nconst entries = Array.isArray(rep.entries) ? rep.entries : [];\nconst cc = rep.cadenceConfig ?? rep.metadata?.cadenceConfig ?? {};\nconst premierEntier = (...valeurs) => {\n  for (const v of valeurs) {\n    const n = Number(v);\n    if (Number.isFinite(n) && n > 0) return Math.floor(n);\n  }\n  return null;\n};\nconst relanceDelaiJours = premierEntier(cc.applied_first_days, cc.appliedFirstDays, cc.applied_first, cc.first_days, cfg.relanceSeuilJoursRepli, 7);\nconst relanceMax = premierEntier(cc.applied_max_followups, cc.appliedMaxFollowups, cc.max_followups, cc.applied_max, cfg.relanceMaxRepli, 2);\nconst cadenceSource = premierEntier(cc.applied_first_days, cc.appliedFirstDays, cc.applied_first, cc.first_days)\n  ? 'config career-ops (/api/followups?full=1)'\n  : 'repli : valeurs par defaut documentees';\nconst followupsErreur = (rep.entries === undefined && rep.due === undefined)\n  ? ('GET /api/followups injoignable ou hors contrat : ' + JSON.stringify(rep).slice(0, 200))\n  : '';\n\n// ── La cle de deduplication des relances ────────────────────────────────\nconst entrepriseSql = String(app.entreprise || '').trim();\nconst posteSql = String(app.poste || '').trim();\nconst cible = aplati(entrepriseSql);\nlet entree = null;\nfor (const e of entries) {\n  const c = aplati(e.company);\n  if (!c || !cible) continue;\n  if (c === cible || c.includes(cible) || cible.includes(c)) { entree = e; break; }\n}\nconst entreprise = entree ? String(entree.company || '').trim() : entrepriseSql;\nconst poste = entree ? String(entree.role || '').trim() : posteSql;\nconst cleSource = entree\n  ? 'tracker career-ops (meme source que WF3)'\n  : 'projection Postgres : aucune ligne de tracker appariee, la cle peut differer de celle de WF3';\nconst relanceId = 'relance-' + (slug(entreprise) || 'entreprise') + '-' + (slug(poste) || 'poste');\n\n// ── Le prompt du classificateur local ───────────────────────────────────\nconst consigne = [\n  'Tu classes UN courriel recu en reponse a une candidature. Reponds UNIQUEMENT par un objet JSON, sans texte autour et sans balise de code.',\n  '',\n  'Schema exact attendu :',\n  '{\"type\":\"<valeur>\",\"confiance\":\"haute|moyenne|basse\",\"resume\":\"<une phrase en francais, 200 caracteres maxi>\"}',\n  '',\n  'Valeurs possibles pour type :',\n  '- accuse_reception : confirmation automatique de reception, message de robot, absence du bureau. AUCUNE personne ne sest prononcee sur la candidature.',\n  '- refus : la candidature nest pas retenue, le poste est pourvu, le processus est clos.',\n  '- entretien : on propose ou on demande un entretien, un echange, des disponibilites.',\n  '- offre : une proposition ou une promesse dembauche.',\n  '- reponse_humaine : une personne repond vraiment (question, demande de piece, mise en attente explicite) sans etre un des cas ci-dessus.',\n  '- hors_sujet : le message ne parle pas de cette candidature (publicite, alerte emploi, infolettre, facture).',\n  '',\n  'REGLE IMPERATIVE : au moindre doute entre accuse_reception et un autre type, choisis accuse_reception et mets confiance basse. Un accuse de reception classe comme une vraie reponse arreterait A TORT les relances, et cest la pire erreur possible ici.',\n  '',\n  'Candidature concernee : ' + (entreprise || 'inconnue') + ' / ' + (poste || 'poste inconnu'),\n  'Expediteur : ' + String(msg.expediteurNom || '') + ' <' + String(msg.expediteur || '') + '>',\n  'Objet : ' + String(msg.objet || ''),\n  'Corps :',\n  String(msg.corps || '').slice(0, 3500),\n].join('\\n');\n\nreturn [{\n  json: {\n    ...msg,\n    candidatureId: String(app.candidature_id || ''),\n    indiceAppariement: String(app.indice || ''),\n    candidatsAppariement: Number(app.candidats || 0),\n    brancheGithub: String(app.branche_github || ''),\n    courrielContact: String(app.courriel_contact || ''),\n    urlOffre: String(app.url_offre || ''),\n    candidatureEnvoyeeLe: String(app.envoyee_le || ''),\n    entreprise, poste, entrepriseSql, posteSql,\n    trackerNum: entree ? String(entree.num ?? '') : '',\n    relanceId,\n    cleSource,\n    histPath: 'data-inbox/relances/' + relanceId + '.json',\n    relanceDelaiJours, relanceMax, cadenceSource, followupsErreur,\n    llmBodyRaw: JSON.stringify({ model: 'career-ops-cli', stream: false, messages: [{ role: 'user', content: consigne }] }),\n  },\n}];"
+      },
+      "notes": "Calcule relanceId avec EXACTEMENT le meme slug que « Relances: normaliser » de WF3 (NFD, sans diacritiques, [^a-z0-9]+ vers -, tronque a 40) et de preference depuis lentreprise/poste du tracker. Une cle differente = un arret ecrit a cote de la cle de deduplication = des relances qui repartent."
+    },
+    {
+      "id": "08cc5f52-26c5-48b4-a62c-e6cbc8ec0a25",
+      "name": "🌐 career-ops: classer la reponse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -608,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Config WF4').first().json.careerOpsBase }}/api/llm/v1/chat/completions",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.llmBodyRaw }}",
+        "options": {
+          "timeout": 240000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "notes": "Shim OpenAI de career-ops vers le CLI local. stream=false : le shim refuse le flux, et une reponse en flux fait planter n8n (Converting circular structure to JSON). Le classificateur na PAS le dernier mot : le noeud suivant verrouille laccuse de reception technique contre lui.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "5b8ef86a-565d-4f4c-ad4f-de6936a3cccc",
+      "name": "🧩 Reponse: verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const ctx = $('🧩 Reponse: contexte et cle de relance').first().json;\nconst brut = $input.first().json ?? {};\n\n// ── Ce que le classificateur a rendu, ou pourquoi il na rien rendu ──────\nlet llmType = '';\nlet llmConfiance = '';\nlet llmResume = '';\nlet llmErreur = '';\nconst contenu = brut?.choices?.[0]?.message?.content;\nif (typeof contenu === 'string' && contenu.trim()) {\n  const t = contenu.replace(/```json/gi, '').replace(/```/g, '').trim();\n  const d = t.indexOf('{');\n  const f = t.lastIndexOf('}');\n  try {\n    const j = JSON.parse(t.slice(d, f + 1));\n    llmType = String(j.type || '').trim().toLowerCase();\n    llmConfiance = String(j.confiance || '').trim().toLowerCase();\n    llmResume = String(j.resume || '').trim().slice(0, 300);\n  } catch (e) {\n    llmErreur = 'reponse du classificateur illisible : ' + String(contenu).slice(0, 200);\n  }\n} else {\n  llmErreur = 'le classificateur local na rien rendu : ' + JSON.stringify(brut).slice(0, 200);\n}\nconst TYPES = ['accuse_reception', 'refus', 'entretien', 'offre', 'reponse_humaine', 'hors_sujet'];\nif (llmType && !TYPES.includes(llmType)) {\n  llmErreur = llmErreur || ('type hors schema rendu par le classificateur : ' + llmType);\n  llmType = '';\n}\n\n// ── PRECEDENCE ──────────────────────────────────────────────────────────\n// 1. Preuve technique daccuse de reception : VERROUILLE. Un en-tete\n//    Auto-Submitted, un expediteur no-reply ou une formule de repondeur ne\n//    se discutent pas, et surtout pas avec un modele de langue.\n// 2. Sinon le classificateur.\n// 3. Sinon un repli deterministe, qui dit quil est un repli.\n// 4. Sinon : indetermine. On narrete rien et on le signale.\nlet type = '';\nlet source = '';\nif (ctx.accuseTechnique) {\n  type = 'accuse_reception';\n  source = 'preuve technique (en-tetes / expediteur / formule) : verdict verrouille, classificateur ignore';\n} else if (llmType) {\n  type = llmType;\n  source = 'classificateur local career-ops';\n} else if ((ctx.indicesEntretien || []).length && !(ctx.indicesRefus || []).length) {\n  type = 'entretien';\n  source = 'repli deterministe : classificateur indisponible';\n} else if ((ctx.indicesRefus || []).length) {\n  type = 'refus';\n  source = 'repli deterministe : classificateur indisponible';\n} else if ((ctx.accuseDoux || []).length) {\n  type = 'accuse_reception';\n  source = 'repli deterministe : classificateur indisponible';\n} else {\n  type = 'indetermine';\n  source = 'aucun verdict : ni preuve technique, ni classificateur, ni indice';\n}\n\n// ── Arret des relances ──────────────────────────────────────────────────\n// Seuls ces quatre types sont une REPONSE. accuse_reception, hors_sujet et\n// indetermine narretent RIEN : cest la regle 1, prise au mot.\nconst ARRETENT = { refus: 'Rejected', entretien: 'Interview', offre: 'Offer', reponse_humaine: 'Responded' };\nconst statutTracker = ARRETENT[type] || '';\nconst arret = Boolean(statutTracker);\nconst LIBELLES = {\n  accuse_reception: 'accuse de reception automatique',\n  refus: 'refus',\n  entretien: 'proposition dentretien',\n  offre: 'proposition dembauche',\n  reponse_humaine: 'reponse humaine',\n  hors_sujet: 'hors sujet',\n  indetermine: 'indetermine',\n};\nconst typeLibelle = LIBELLES[type] || type;\nconst arreteLe = new Date().toISOString();\nconst motifArret = arret ? ('reponse du recruteur : ' + typeLibelle) : '';\n\n// Le tracker est le SEUL point decriture sanctionne de data/applications.md, et\n// les statistiques sen derivent (analyze-patterns.mjs, /stats, /analytics).\n// Rien nest recalcule ici, et il ne faut pas y toucher : ecrire la ligne suffit.\nconst note = ('reponse ' + type + ' recue le ' + String(ctx.recuLe || arreteLe) + ' de ' + String(ctx.expediteur || '') + ' (workflow 4, fil ' + String(ctx.filGmail || '') + ')').slice(0, 300);\nconst trackerBodyRaw = JSON.stringify({\n  entreprise: ctx.entreprise, statut: statutTracker, role: ctx.poste, note,\n});\n\nreturn [{\n  json: {\n    ...ctx,\n    type, typeLibelle, arret, statutTracker, motifArret, arreteLe,\n    verdictSource: source,\n    llmType, llmConfiance, llmResume, llmErreur,\n    // Le classificateur a vu une formule daccuse de reception et a quand meme\n    // tranche autrement : ca se dit dans la notification, ca ne se cache pas.\n    tensionAccuse: Boolean((ctx.accuseDoux || []).length && type !== 'accuse_reception' && !ctx.accuseTechnique),\n    resume: llmResume,\n    trackerBodyRaw,\n  },\n}];"
+      },
+      "notes": "REGLE 1, appliquee ici et nulle part ailleurs : un accuse de reception automatique prouve par les en-tetes NE COMPTE PAS comme une reponse, et le classificateur ne peut pas le renverser. Un verdict indetermine narrete rien : une relance de trop que Lineo voit partir vaut mieux quun arret silencieux sur un accuse mal lu."
+    },
+    {
+      "id": "8df3adeb-c223-4b65-8cc9-85b299294db1",
+      "name": "🔀 Vraie reponse : arreter les relances ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        0
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json.arret }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "notes": "Faux pour un accuse de reception, un hors sujet ou un indetermine : Lineo est prevenu, les relances continuent. Cest lasymetrie voulue par la regle 1."
+    },
+    {
+      "id": "f2f03418-85a4-4977-9b67-670b7ee79427",
+      "name": "🐙 GitHub: historique relance ?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        96,
+        -240
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config WF4').first().json.githubOwner }}/{{ $('⚙️ Config WF4').first().json.githubRepo }}/contents/{{ $json.histPath }}?ref={{ $('⚙️ Config WF4').first().json.githubBaseBranch }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-4-ecoute-gmail"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "notes": "404 attendu quand aucune relance nest encore partie : cest le cas le plus courant, le recruteur repond avant la premiere relance. onError laisse alors passer un item vide et le fichier sera cree.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "55b4a239-ad9e-4ad8-9a82-0f2af2216a6f",
+      "name": "🧩 Arret: corps et sha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -240
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const cfg = $('⚙️ Config WF4').first().json;\nconst v = $('🧩 Reponse: verdict').first().json;\nconst prev = $input.first().json ?? {};\n\nif (!v.relanceId) {\n  throw new Error('verdict sans relanceId : rien ne serait ecrit et les relances repartiraient sans que personne le sache');\n}\n\nlet histoire = null;\nlet sha = null;\nif (typeof prev.sha === 'string' && prev.sha) {\n  sha = prev.sha;\n  try {\n    const lu = JSON.parse(Buffer.from(String(prev.content || '').replace(/\\n/g, ''), 'base64').toString('utf8'));\n    if (lu && typeof lu === 'object') histoire = lu;\n  } catch (e) {\n    // Fiche illisible : on la remplace plutot que de bloquer larret. Perdre\n    // lhistorique est moins grave que laisser les relances repartir.\n    histoire = null;\n  }\n}\nconst relances = Array.isArray(histoire?.relances) ? histoire.relances : [];\n\nconst fiche = {\n  schema: 'career-ops-relances/v1',\n  id: v.relanceId,\n  entreprise: v.entreprise,\n  poste: v.poste,\n  courriel_contact: v.courrielContact || null,\n  url_offre: v.urlOffre || null,\n  cadence: {\n    espacement_jours: v.relanceDelaiJours,\n    maximum: v.relanceMax,\n    source: v.cadenceSource,\n  },\n  relances,\n  // LE champ qui arrete tout. « Relance: decider » doit le lire en TOUT PREMIER,\n  // avant le plafond et avant lespacement.\n  arret: {\n    actif: true,\n    motif: v.motifArret,\n    type_reponse: v.type,\n    arrete_le: v.arreteLe,\n    source: 'workflow 4 : ecoute Gmail des reponses',\n    verdict_source: v.verdictSource,\n    resume: v.resume || null,\n    message_gmail_id: v.messageId,\n    fil_gmail: v.filGmail,\n    expediteur: v.expediteur,\n    objet: v.objet,\n    indice_appariement: v.indiceAppariement,\n    cle_source: v.cleSource,\n    candidature_id: v.candidatureId || null,\n    branche_github: v.brancheGithub || null,\n    statut_tracker: v.statutTracker,\n    execution_id: String($execution.id),\n  },\n};\n\nconst body = {\n  message: 'chore(relances): arret ' + (v.entreprise || 'entreprise') + ' (' + v.type + ')',\n  content: Buffer.from(JSON.stringify(fiche, null, 2) + '\\n', 'utf8').toString('base64'),\n  branch: cfg.githubBaseBranch,\n};\nif (sha) body.sha = sha;\n\nreturn [{ json: { ...v, histSha: sha, relancesConservees: relances.length, arretBodyRaw: JSON.stringify(body) } }];"
+      },
+      "notes": "Ecrit le champ arret DANS data-inbox/relances/<id>.json : cest la seule cle de deduplication que « Relance: decider » de WF3 relit. Ecrire seulement en base narreterait RIEN. Les relances deja envoyees sont preservees : ce fichier est aussi leur trace et le plafond les compte."
+    },
+    {
+      "id": "fa8ca28b-a11f-4340-9e5b-e8a1da700f12",
+      "name": "🐙 GitHub: ecrire larret de relance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        544,
+        -240
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $('⚙️ Config WF4').first().json.githubOwner }}/{{ $('⚙️ Config WF4').first().json.githubRepo }}/contents/{{ $json.histPath }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.arretBodyRaw }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REMPLACER"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow-4-ecoute-gmail"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "notes": "Le FICHIER dabord, la base ensuite : ordre non negociable (data-inbox/README.md). Si ce PUT echoue definitivement, la sortie derreur part sur une alerte : un arret non ecrit est un arret qui nexiste pas, et il ne doit pas passer inapercu.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "8b1a48bd-ebd2-44f9-8d4b-95ff21643366",
+      "name": "🐘 Postgres: neutraliser les echeances",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        768,
+        -240
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH e AS (SELECT $1::jsonb AS d),\nmaj AS (\n  UPDATE career_ops.relance r\n     SET envoyee_le = now(), projete_le = now()\n    FROM e\n   WHERE r.candidature_id = NULLIF(btrim(e.d->>'candidature_id'), '')::bigint\n     AND r.envoyee_le IS NULL\n  RETURNING r.id, r.echeance\n)\nSELECT (SELECT count(*) FROM maj)      AS echeances_neutralisees,\n       (SELECT max(echeance) FROM maj) AS derniere_echeance",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [JSON.stringify({ candidature_id: $('🧩 Reponse: verdict').first().json.candidatureId })] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "A_RECONNECTER",
+          "name": "postgres (a reconnecter)"
+        }
+      },
+      "notes": "Sortie de la vue v_relance_due. career_ops.candidature.statut nest PAS touche : il a une cle etrangere vers career_ops.statut et il ny a pas detat REPONDUE sans migration. Non bloquant : la base est une projection, elle nest la source de rien.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "dd38fa8d-6582-4a01-a12e-1d2f120fd04e",
+      "name": "🌐 career-ops: tracker set-status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        992,
+        -240
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Config WF4').first().json.careerOpsBase }}/api/tracker/set-status",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('🧩 Reponse: verdict').first().json.trackerBodyRaw }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "notes": "set-status.mjs est le SEUL point decriture sanctionne de data/applications.md. Les statistiques (/stats, /analytics, analyze-patterns.mjs) sen derivent : ecrire la ligne SUFFIT, il ny a rien a recalculer ici. Un 422 signifie que la ligne du tracker nexiste pas : ce nest pas une panne, et cest dit dans la notification.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "664b382f-ce52-443c-93a7-87e229637852",
+      "name": "📧 Lineo: reponse recue, relances arretees",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1216,
+        -240
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config WF4').first().json.lineoEmail }}",
+        "subject": "=[candidatures] {{ $('🧩 Reponse: verdict').first().json.entreprise }} a repondu : {{ $('🧩 Reponse: verdict').first().json.typeLibelle }}",
+        "emailType": "html",
+        "message": "=<p><b>Le recruteur a repondu. Les relances automatiques sont arretees.</b></p><table><tbody><tr><td>Candidature</td><td><b>{{ $('🧩 Reponse: verdict').first().json.entreprise }} / {{ $('🧩 Reponse: verdict').first().json.poste }}</b></td></tr><tr><td>Classement</td><td><b>{{ $('🧩 Reponse: verdict').first().json.typeLibelle }}</b> ({{ $('🧩 Reponse: verdict').first().json.verdictSource }})</td></tr><tr><td>Confiance</td><td>{{ $('🧩 Reponse: verdict').first().json.llmConfiance || \"non rendue\" }}</td></tr><tr><td>Resume</td><td>{{ $('🧩 Reponse: verdict').first().json.resume || \"aucun\" }}</td></tr><tr><td>Expediteur</td><td>{{ $('🧩 Reponse: verdict').first().json.expediteurNom }} &lt;{{ $('🧩 Reponse: verdict').first().json.expediteur }}&gt;</td></tr><tr><td>Objet</td><td>{{ $('🧩 Reponse: verdict').first().json.objet }}</td></tr><tr><td>Rattachement</td><td>{{ $('🧩 Reponse: verdict').first().json.indiceAppariement }} ({{ $('🧩 Reponse: verdict').first().json.candidatsAppariement }} candidat(s))</td></tr></tbody></table><h3>Ce qui a ete ecrit</h3><table><tbody><tr><td>Fichier darret</td><td><b>{{ $('🧩 Arret: corps et sha').first().json.histPath }}</b> sur main ({{ $('🧩 Arret: corps et sha').first().json.relancesConservees }} relance(s) conservee(s))</td></tr><tr><td>Cle de relance</td><td>{{ $('🧩 Reponse: verdict').first().json.relanceId }} ({{ $('🧩 Reponse: verdict').first().json.cleSource }})</td></tr><tr><td>Echeances neutralisees</td><td>{{ $('🐘 Postgres: neutraliser les echeances').first().json.echeances_neutralisees }}</td></tr><tr><td>Tracker</td><td>{{ $json.ok ? \"ecrit : \" + $json.statut : \"NON ecrit : \" + ($json.error || \"erreur inconnue\") }}</td></tr></tbody></table><p>{{ $('🧩 Reponse: verdict').first().json.llmErreur ? \"Classificateur : \" + $('🧩 Reponse: verdict').first().json.llmErreur : \"\" }}</p><p>{{ $('🧩 Reponse: verdict').first().json.followupsErreur ? \"career-ops : \" + $('🧩 Reponse: verdict').first().json.followupsErreur : \"\" }}</p><p><a href=\"{{ $('🧩 Reponse: verdict').first().json.lienGmail }}\">Ouvrir le fil dans Gmail</a></p><hr><p>Les statistiques ne sont pas recalculees ici : elles se derivent du tracker (/stats, /analytics).</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Notification vers Lineo par Gmail. On ne passe PAS par /api/n8n-replies ni par la page /reponses : ce module sert aux reponses aux posts du forum n8n, le melanger polluerait une file qui marche.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "38e29d88-eaf7-4d23-978d-b1028cd79dcb",
+      "name": "🔁 Boucle messages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1728,
+        0
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      },
+      "notes": "batchSize=1 : un message par iteration. Cest la seule forme ou $(...).first() designe sans ambiguite litem de literation courante — le piege qui a coute trois executions a la branche relances du monolithe."
+    },
+    {
+      "id": "90090278-508c-46b2-a287-aae9a5cdda0c",
+      "name": "📧 Alerte: arret NON ecrit",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        -480
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config WF4').first().json.lineoEmail }}",
+        "subject": "=[ACTION REQUISE] arret de relance NON ecrit : {{ $('🧩 Reponse: verdict').first().json.entreprise }}",
+        "emailType": "html",
+        "message": "=<p><b>Le recruteur a repondu et le fichier darret na PAS pu etre ecrit. Les relances automatiques vont repartir.</b></p><table><tbody><tr><td>Candidature</td><td><b>{{ $('🧩 Reponse: verdict').first().json.entreprise }} / {{ $('🧩 Reponse: verdict').first().json.poste }}</b></td></tr><tr><td>Classement</td><td>{{ $('🧩 Reponse: verdict').first().json.typeLibelle }}</td></tr><tr><td>Fichier attendu</td><td>{{ $('🧩 Reponse: verdict').first().json.histPath }}</td></tr><tr><td>Erreur GitHub</td><td>{{ JSON.stringify($json).slice(0, 600) }}</td></tr></tbody></table><p>A faire a la main sur la branche main du depot cv : creer ou completer ce fichier avec un bloc <code>arret</code> ({{ '\"actif\": true' }}).</p><p><a href=\"{{ $('🧩 Reponse: verdict').first().json.lienGmail }}\">Ouvrir le fil dans Gmail</a></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Le pire scenario du workflow : le recruteur a repondu, et la cle de deduplication na pas pu etre ecrite. Les relances vont repartir. Ca se dit, fort.",
+      "onError": "continueRegularOutput",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "93c5850e-5e78-4321-980d-68bf672d73dd",
+      "name": "📧 Lineo: signal sans arret",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        240
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config WF4').first().json.lineoEmail }}",
+        "subject": "=[candidatures] {{ $json.entreprise }} : {{ $json.typeLibelle }}, relances maintenues",
+        "emailType": "html",
+        "message": "=<p>Un courriel a ete rattache a une candidature. <b>Les relances automatiques ne sont PAS arretees.</b></p><table><tbody><tr><td>Candidature</td><td><b>{{ $json.entreprise }} / {{ $json.poste }}</b></td></tr><tr><td>Classement</td><td><b>{{ $json.typeLibelle }}</b> ({{ $json.verdictSource }})</td></tr><tr><td>Confiance</td><td>{{ $json.llmConfiance || \"non rendue\" }}</td></tr><tr><td>Resume</td><td>{{ $json.resume || \"aucun\" }}</td></tr><tr><td>Expediteur</td><td>{{ $json.expediteurNom }} &lt;{{ $json.expediteur }}&gt;</td></tr><tr><td>Objet</td><td>{{ $json.objet }}</td></tr><tr><td>Rattachement</td><td>{{ $json.indiceAppariement }} ({{ $json.candidatsAppariement }} candidat(s))</td></tr><tr><td>Preuves automatiques</td><td>{{ ($json.preuvesTechniques || []).join(\" | \") || \"aucune\" }}</td></tr><tr><td>Cle de relance</td><td>{{ $json.relanceId }}</td></tr></tbody></table><p>{{ $json.tensionAccuse ? \"Attention : le message contient une formule daccuse de reception et a pourtant ete classe autrement. A relire.\" : \"\" }}</p><p>{{ $json.llmErreur ? \"Classificateur : \" + $json.llmErreur : \"\" }}</p><p>{{ $json.followupsErreur ? \"career-ops : \" + $json.followupsErreur : \"\" }}</p><p><a href=\"{{ $json.lienGmail }}\">Ouvrir le fil dans Gmail</a></p><hr><p>Si ce classement est faux et que le recruteur a bel et bien repondu, il faut arreter les relances a la main : ajouter un bloc arret dans {{ $json.histPath }} sur la branche main du depot cv.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Un accuse de reception nest pas un non-evenement : Lineo doit savoir que le workflow la vu, la classe, et na volontairement rien arrete. Un silence ici serait indiscernable dune panne.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "dda8a1a4-7a81-41ae-aedc-d107bf851278",
+      "name": "🔔 Webhook: rejouer des messages",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        400
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf4-rejouer",
+        "options": {}
+      },
+      "notes": "Seconde entree, volontaire : le declencheur Gmail ne redonne JAMAIS un message deja scrute. Sans porte de rejeu, une panne de 5 minutes perd des reponses pour toujours, en silence. Sert aussi a eprouver la chaine complete pour de vrai. POST /webhook/wf4-rejouer?q=<recherche Gmail>&limit=<n>",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "5e98bbde-7f5a-4847-9202-2fcdd7aa85cd",
+      "name": "📥 Gmail: messages a rejouer",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2176,
+        400
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ Math.min(Number($json.query.limit || 3), 10) }}",
+        "simple": false,
+        "filters": {
+          "readStatus": "both",
+          "includeSpamTrash": false,
+          "q": "={{ $json.query.q || 'newer_than:2d -from:me -in:chats' }}"
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Meme forme de sortie que le declencheur (simple=false : les EN-TETES sont indispensables au verrou anti accuse de reception). La recherche par defaut reste etroite : un rejeu large reclasserait toute la boite.",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "d6ba03c9-bd78-4000-b59e-cf01e141aac4",
+      "name": "📧 Alerte: appariement impossible",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1280,
+        400
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('⚙️ Config WF4').first().json.lineoEmail }}",
+        "subject": "=[ACTION REQUISE] WF4 n a pas pu examiner un message",
+        "emailType": "html",
+        "message": "=<p><b>Un courriel est arrive et WF4 n a pas pu le rattacher a une candidature.</b> L appariement en base a echoue : ce message n a ete ni classe ni traite. Si c etait une reponse de recruteur, elle est passee inapercue.</p><table><tbody><tr><td>Expediteur</td><td>{{ $('🔁 Boucle messages').first().json.expediteurNom }}</td></tr><tr><td>Adresse</td><td>{{ $('🔁 Boucle messages').first().json.expediteur }}</td></tr><tr><td>Objet</td><td>{{ $('🔁 Boucle messages').first().json.objet }}</td></tr><tr><td>Erreur</td><td>{{ JSON.stringify($json).slice(0, 500) }}</td></tr></tbody></table><p>Cause la plus probable : la credential Postgres de n8n pointe sur le mauvais serveur. Dans n8n, Credentials, Postgres account, champ Host : mettre n8n-postgres-1 a la place de postgres.</p><p><b>Rattrapage une fois corrige.</b> Le declencheur Gmail ne redonne jamais un message deja scrute : il faut appeler la porte de rejeu, en POST, sur le chemin webhook wf4-rejouer, avec le parametre q a newer_than:2d.</p><p><a href=\"{{ $('🔁 Boucle messages').first().json.lienGmail }}\">Ouvrir le fil dans Gmail</a></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A_RECONNECTER",
+          "name": "gmailOAuth2 (a reconnecter)"
+        }
+      },
+      "notes": "Un message recu qui n'a PAS pu etre examine, c'est une reponse de recruteur potentiellement perdue : le declencheur Gmail ne redonne jamais un message deja scrute. Cause la plus probable aujourd'hui : la credential Postgres. Le rattrapage passe par la porte de rejeu wf4-rejouer.",
+      "onError": "continueRegularOutput",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "id": "a63ee062-017f-42d6-b630-9dfc2d31a46b",
+      "name": "🔀 Postgres a repondu ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1392,
+        160
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "pg1",
+              "leftValue": "={{ $json.candidats !== undefined }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "notes": "Le noeud Postgres NE ROUTE PAS ses pannes de connexion vers sa sortie d'erreur : il les repousse sur la sortie principale, avec l'item d'entree et une cle error (comportement historique continueOnFail). Verifie sur les executions 960048 et 960056. Sans ce garde, une base injoignable serait indiscernable d'un « aucune candidature ne correspond » : le message serait ecarte en silence, et une reponse de recruteur avec. La requete d'appariement rend TOUJOURS la colonne candidats quand elle aboutit : son absence signe la panne."
+    }
+  ],
+  "connections": {
+    "📬 Gmail: nouveaux messages": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config WF4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config WF4": {
+      "main": [
+        [
+          {
+            "node": "🧩 Messages: normaliser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Messages: normaliser": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐘 Postgres: apparier la candidature": {
+      "main": [
+        [
+          {
+            "node": "🔀 Postgres a repondu ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Alerte: appariement impossible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Rattache a une candidature ?": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: cadence et tracker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔁 Boucle messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: cadence et tracker": {
+      "main": [
+        [
+          {
+            "node": "🧩 Reponse: contexte et cle de relance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Reponse: contexte et cle de relance": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: classer la reponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: classer la reponse": {
+      "main": [
+        [
+          {
+            "node": "🧩 Reponse: verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Reponse: verdict": {
+      "main": [
+        [
+          {
+            "node": "🔀 Vraie reponse : arreter les relances ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Vraie reponse : arreter les relances ?": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: historique relance ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Lineo: signal sans arret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: historique relance ?": {
+      "main": [
+        [
+          {
+            "node": "🧩 Arret: corps et sha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Arret: corps et sha": {
+      "main": [
+        [
+          {
+            "node": "🐙 GitHub: ecrire larret de relance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐙 GitHub: ecrire larret de relance": {
+      "main": [
+        [
+          {
+            "node": "🐘 Postgres: neutraliser les echeances",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Alerte: arret NON ecrit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐘 Postgres: neutraliser les echeances": {
+      "main": [
+        [
+          {
+            "node": "🌐 career-ops: tracker set-status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌐 career-ops: tracker set-status": {
+      "main": [
+        [
+          {
+            "node": "📧 Lineo: reponse recue, relances arretees",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Lineo: reponse recue, relances arretees": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Boucle messages": {
+      "main": [
+        [
+          {
+            "node": "🧩 Bilan de la scrutation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🐘 Postgres: apparier la candidature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Alerte: arret NON ecrit": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Lineo: signal sans arret": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔔 Webhook: rejouer des messages": {
+      "main": [
+        [
+          {
+            "node": "📥 Gmail: messages a rejouer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Gmail: messages a rejouer": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config WF4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Alerte: appariement impossible": {
+      "main": [
+        [
+          {
+            "node": "🔁 Boucle messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Postgres a repondu ?": {
+      "main": [
+        [
+          {
+            "node": "🔀 Rattache a une candidature ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Alerte: appariement impossible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "tags": []
+}

@@ -1,0 +1,202 @@
+{
+  "name": "Motion Designer — Dispatch",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "6e6cbfbf-732a-4891-a5d0-95f65911a53c",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "e13ec514-e6af-48bb-965e-b34dd462c31a",
+      "name": "Job dispatch webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "var item = items[0].json;\nvar headers = item.headers || {};\nvar body = item.body || {};\nif (!headers[\"x-internal-token\"]) {\n  throw new Error(\"Jeton interne absent : en-tête x-internal-token manquant sur l'appel webhook\");\n}\nvar jobId = body.jobId;\nvar sourcePath = body.sourcePath;\nvar outputPath = body.outputPath;\nif (typeof jobId !== \"string\" || jobId.length === 0) {\n  throw new Error(\"Payload webhook invalide : jobId manquant ou vide\");\n}\nif (typeof sourcePath !== \"string\" || sourcePath.length === 0) {\n  throw new Error(\"Payload webhook invalide : sourcePath manquant ou vide\");\n}\nif (typeof outputPath !== \"string\" || outputPath.length === 0) {\n  throw new Error(\"Payload webhook invalide : outputPath manquant ou vide\");\n}\nvar camera = (body.camera && typeof body.camera === \"object\" && Array.isArray(body.camera.moves)) ? body.camera : { moves: [] };\nvar clicks = Array.isArray(body.clicks) ? body.clicks : [];\nvar editPlan = {\n  version: 1,\n  jobId: jobId,\n  source: { path: sourcePath },\n  output: { path: outputPath, profile: \"final\" },\n  timeline: [],\n  camera: camera,\n  clicks: clicks\n};\nreturn [{ json: { jobId: jobId, editPlan: editPlan } }];\n"
+      },
+      "id": "8be7a6ea-196d-4598-b86d-515936950105",
+      "name": "Validate & build edit-plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://service.interne:3000/render",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"jobId\": $json.jobId, \"editPlan\": $json.editPlan, \"resumeUrl\": $execution.resumeUrl } }}",
+        "options": {}
+      },
+      "id": "2a11f6a5-766f-48ef-88e8-3dc6471dabc8",
+      "name": "Dispatch to render worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        -16
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://service.interne:3000/api/internal/jobs/{{ $('Job dispatch webhook').item.json.body.jobId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"status\": \"RENDERING\" }",
+        "options": {}
+      },
+      "id": "d54d0119-b9ec-4d92-a203-6eca97a903a8",
+      "name": "Mark job RENDERING",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "id": "d383c04c-f851-453e-83e8-37518b2d60af",
+      "name": "Wait for render callback",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        0
+      ],
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://service.interne:3000/api/internal/jobs/{{ $('Job dispatch webhook').item.json.body.jobId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body.status === \"done\" ? { \"status\": \"DONE\", \"outputPath\": $json.body.outputPath } : { \"status\": \"FAILED\", \"errorMessage\": $json.body.errorMessage || \"Le render worker a signale un echec sans message\" } }}",
+        "options": {}
+      },
+      "id": "d1b7bcec-a1b7-40bd-b422-61ddf52c0c5b",
+      "name": "Update job status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Job dispatch webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & build edit-plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & build edit-plan": {
+      "main": [
+        [
+          {
+            "node": "Dispatch to render worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch to render worker": {
+      "main": [
+        [
+          {
+            "node": "Mark job RENDERING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark job RENDERING": {
+      "main": [
+        [
+          {
+            "node": "Wait for render callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for render callback": {
+      "main": [
+        [
+          {
+            "node": "Update job status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

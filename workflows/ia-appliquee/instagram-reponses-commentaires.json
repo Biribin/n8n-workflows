@@ -1,0 +1,510 @@
+{
+  "name": "🔑 Instagram API — Extraction Tokens",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "={{$json.httpMethod}}",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "2d95ba81-9812-44e3-a326-a38b5e6eec65",
+      "name": "📩 Webhook Instagram",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        784
+      ],
+      "webhookId": "A_REGENERER",
+      "notes": "Reçoit les notifications de Meta (GET = vérification, POST = nouveau commentaire)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "condition-is-get",
+              "leftValue": "={{ $json.headers['content-type'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1c40bbe5-31ae-42ca-8538-db72ec087ac7",
+      "name": "🔀 GET ou POST ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        784
+      ],
+      "notes": "GET = Meta vérifie le webhook | POST = Nouveau commentaire reçu"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7cd5a471-70bf-45b5-91be-cbdc0830d371",
+      "name": "✅ Vérification Meta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        656
+      ],
+      "notes": "Renvoie le hub.challenge pour valider le webhook auprès de Meta"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4a211c6a-9f13-4df0-a816-e041c9c6dd8b",
+      "name": "✅ ACK 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        896
+      ],
+      "notes": "Répond 200 immédiatement à Meta (obligatoire, timeout 20s sinon)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire les données du commentaire depuis le payload Meta\nconst body = $input.first().json.body;\n\nconst entries = body.entry || [];\nconst results = [];\n\nfor (const entry of entries) {\n  for (const change of entry.changes || []) {\n    if (change.field === 'comments') {\n      results.push({\n        comment_id: change.value.id,\n        text: change.value.text,\n        username: change.value.from?.username || 'inconnu',\n        user_id: change.value.from?.id || '',\n        media_id: change.value.media?.id || '',\n        timestamp: new Date().toISOString()\n      });\n    }\n  }\n}\n\nif (results.length === 0) {\n  results.push({ skip: true, reason: 'Pas un commentaire' });\n}\n\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "a966743d-ccaf-4a26-b85b-3b2649f258fc",
+      "name": "📝 Extraire Commentaire",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        896
+      ],
+      "notes": "Parse le payload Meta et extrait : comment_id, text, username, user_id, media_id"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-not-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            },
+            {
+              "id": "cond-not-self",
+              "leftValue": "={{ $json.user_id }}",
+              "rightValue": "TON_INSTAGRAM_ACCOUNT_ID",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-not-empty",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6d510320-ef41-4027-88c4-3e52ad4bf4cd",
+      "name": "🛡️ Filtres Anti-Spam",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        464,
+        896
+      ],
+      "notes": "Ignore : nos propres commentaires, les payloads vides, les événements non-commentaire"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Liste de mots-clés à bloquer\nconst BLACKLIST = [\n  'spam', 'fake', 'arnaque', 'scam', 'clickbait',\n  'follow me', 'check my', 'dm me', 'link in bio'\n];\n\nconst text = $input.first().json.text.toLowerCase();\nconst isSpam = BLACKLIST.some(kw => text.includes(kw));\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    is_spam: isSpam\n  }\n}];"
+      },
+      "id": "49ab357b-14a6-4dab-a8d5-90bac91cb64f",
+      "name": "🚫 Détection Spam",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        816
+      ],
+      "notes": "Vérifie le commentaire contre une blacklist de mots-clés (spam, arnaque, etc.)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-not-spam",
+              "leftValue": "={{ $json.is_spam }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1b6f0bed-9215-492e-8468-f9e923484cfb",
+      "name": "🔀 Spam ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        944,
+        816
+      ],
+      "notes": "Si spam → stop | Si clean → continue vers Claude"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 200,\n  \"system\": \"Tu es le community manager d'une marque sur Instagram. Réponds en français, ton amical et pro. 1-2 phrases max. 1-2 emojis max. Ne donne jamais de prix, redirige en DM. Si compliment → remercie. Si question → réponds ou redirige en DM. Si négatif → reste poli, propose DM. Ne réponds jamais aux insultes.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Commentaire Instagram de @{{ $json.username }} : \\\"{{ $json.text }}\\\"\\n\\nGénère une réponse appropriée. Réponds UNIQUEMENT avec le texte de la réponse.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a50f6a60-e684-4934-b33b-ad81de75a898",
+      "name": "🧠 Claude AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1184,
+        736
+      ],
+      "notes": "Envoie le commentaire à Claude Sonnet pour générer une réponse contextuelle et naturelle"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire la réponse de Claude\nconst response = $input.first().json;\nconst reply = response.content?.[0]?.text?.trim() || 'Merci pour ton commentaire ! 🙏';\n\n// Récupérer les données du commentaire original\nconst previous = $('🚫 Détection Spam').first().json;\n\nreturn [{\n  json: {\n    comment_id: previous.comment_id,\n    username: previous.username,\n    original_text: previous.text,\n    reply: reply\n  }\n}];"
+      },
+      "id": "09d445cd-e677-4e54-8417-02ebb10d04e8",
+      "name": "✏️ Formater Réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        736
+      ],
+      "notes": "Extrait le texte de Claude + fallback sur réponse par défaut si erreur"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.comment_id }}/replies",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"{{ $json.reply }}\",\n  \"access_token\": \"{{ $env.INSTAGRAM_PAGE_TOKEN }}\"\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "12f9f4e6-9f59-49c0-867e-6c9c6e3aad74",
+      "name": "📤 Poster Réponse Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1664,
+        736
+      ],
+      "notes": "Poste la réponse générée comme reply au commentaire via l'API Instagram Graph"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log final pour suivi\nconst data = $input.first().json;\nconst previous = $('✏️ Formater Réponse').first().json;\n\nconsole.log(`✅ Réponse postée pour @${previous.username}`);\nconsole.log(`   Commentaire: \"${previous.original_text}\"`);\nconsole.log(`   Réponse: \"${previous.reply}\"`);\nconsole.log(`   Instagram Reply ID: ${data.id || 'N/A'}`);\n\nreturn [{\n  json: {\n    status: 'success',\n    username: previous.username,\n    comment: previous.original_text,\n    reply: previous.reply,\n    instagram_reply_id: data.id || null,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "1992c5d4-b2a6-43f3-85a8-3d078690bfc9",
+      "name": "📊 Log Succès",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        736
+      ],
+      "notes": "Log le résultat : commentaire original, réponse IA, ID de la réponse Instagram"
+    },
+    {
+      "parameters": {},
+      "id": "346478eb-701d-4e6d-a093-747103a2f7d4",
+      "name": "🗑️ Spam Ignoré",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        944
+      ],
+      "notes": "Commentaire spam détecté → aucune action"
+    },
+    {
+      "parameters": {},
+      "id": "c15c0fc5-7469-4e37-8a86-0e4fd0c20243",
+      "name": "⏭️ Ignoré",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1024
+      ],
+      "notes": "Commentaire filtré (propre commentaire, vide, ou non-commentaire)"
+    },
+    {
+      "parameters": {
+        "content": "## 🔑 Instagram API — Extraction Tokens\n\n### Mode d'emploi :\n1. Remplis tes **App ID** et **App Secret** dans le nœud \"⚙️ Config\"\n2. Active le workflow\n3. Ouvre l'URL du nœud \"🌐 Lancer OAuth\" dans ton navigateur\n4. Connecte-toi avec Facebook et autorise l'app\n5. Le workflow récupère automatiquement :\n   - ✅ Long-Lived User Token (60 jours)\n   - ✅ Page Token permanent (n'expire jamais)\n   - ✅ Instagram Business Account ID\n6. Tout est affiché dans le nœud final \"📋 Résultat Final\"",
+        "height": 388,
+        "width": 420,
+        "color": 4
+      },
+      "id": "b406428e-17e0-430c-b234-59e8fc8cc7f8",
+      "name": "📘 Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ⚠️ REMPLIS ICI tes identifiants\n\nVa sur developers.facebook.com\n→ Ton App → Paramètres → Général",
+        "width": 416,
+        "color": 6
+      },
+      "id": "43830a8a-2d63-4959-a6d8-aed4307cb9e4",
+      "name": "⚠️ Note Config",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        896
+      ]
+    }
+  ],
+  "connections": {
+    "🔀 GET ou POST ?": {
+      "main": [
+        [
+          {
+            "node": "✅ Vérification Meta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✅ ACK 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ ACK 200": {
+      "main": [
+        [
+          {
+            "node": "📝 Extraire Commentaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Extraire Commentaire": {
+      "main": [
+        [
+          {
+            "node": "🛡️ Filtres Anti-Spam",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Filtres Anti-Spam": {
+      "main": [
+        [
+          {
+            "node": "🚫 Détection Spam",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⏭️ Ignoré",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚫 Détection Spam": {
+      "main": [
+        [
+          {
+            "node": "🔀 Spam ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Spam ?": {
+      "main": [
+        [
+          {
+            "node": "🧠 Claude AI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🗑️ Spam Ignoré",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Claude AI": {
+      "main": [
+        [
+          {
+            "node": "✏️ Formater Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ Formater Réponse": {
+      "main": [
+        [
+          {
+            "node": "📤 Poster Réponse Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Poster Réponse Instagram": {
+      "main": [
+        [
+          {
+            "node": "📊 Log Succès",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": [
+    {
+      "updatedAt": "2026-05-26T14:42:05.931Z",
+      "createdAt": "2026-05-26T14:42:05.931Z",
+      "id": "eoSoAoYLlmOvXp3H",
+      "name": "OAuth"
+    },
+    {
+      "updatedAt": "2026-05-26T14:42:05.909Z",
+      "createdAt": "2026-05-26T14:42:05.909Z",
+      "id": "zqtAxIVqn9gbed6f",
+      "name": "Setup"
+    },
+    {
+      "updatedAt": "2026-05-26T09:49:51.487Z",
+      "createdAt": "2026-05-26T09:49:51.487Z",
+      "id": "uUQPw84i1Iu7OJ4U",
+      "name": "Auto-Reply"
+    },
+    {
+      "updatedAt": "2026-05-26T09:49:51.482Z",
+      "createdAt": "2026-05-26T09:49:51.482Z",
+      "id": "xMrBURLgCHrFVW3k",
+      "name": "Instagram"
+    },
+    {
+      "updatedAt": "2026-05-26T09:49:51.483Z",
+      "createdAt": "2026-05-26T09:49:51.483Z",
+      "id": "YsgxLT66tW74HWhD",
+      "name": "Claude AI"
+    }
+  ]
+}
