@@ -1,0 +1,160 @@
+{
+  "name": "Pipeline - Ecriture hotellerie (ACME Aviation) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ecriture-hotellerie",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -208,
+        64
+      ],
+      "id": "2f311a89-dc6d-4f7a-a8dc-f8ff40a610f1",
+      "name": "Webhook",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.contacts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        16,
+        64
+      ],
+      "id": "6aa3681f-2d5e-4fad-ab12-d7b33abbb6a5",
+      "name": "Split Out contacts"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.id_prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.entreprise }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.domaine }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json.secteur }}"
+            },
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.decideur }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.poste }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.linkedin }}"
+            },
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.telephone }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $json.source }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        64
+      ],
+      "id": "d0d3447d-48a1-4f7b-8262-ec7c4ea0e84e",
+      "name": "Ecrire Air hotellerie",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Out contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out contacts": {
+      "main": [
+        [
+          {
+            "node": "Ecrire Air hotellerie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

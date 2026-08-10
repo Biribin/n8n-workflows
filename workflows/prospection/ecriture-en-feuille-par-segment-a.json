@@ -1,0 +1,160 @@
+{
+  "name": "Pipeline - Ecriture evenementiel (ACME Aviation) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ecriture-evenementiel",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7e8e6c5b-6713-4f7e-9688-3c37db83ba77",
+      "name": "Webhook",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.contacts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "199b63c3-6a3c-49cf-8011-9eda5c981d37",
+      "name": "Split Out contacts"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.id_prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.entreprise }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.domaine }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json.secteur }}"
+            },
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.decideur }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.poste }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.linkedin }}"
+            },
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.telephone }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $json.source }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "affc8d34-8b99-4d66-8aea-f3419c82b605",
+      "name": "Ecrire Air evenementiel",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Out contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out contacts": {
+      "main": [
+        [
+          {
+            "node": "Ecrire Air evenementiel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

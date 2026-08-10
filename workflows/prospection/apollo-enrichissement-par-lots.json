@@ -1,0 +1,213 @@
+{
+  "name": "Apollo - Enrichissement LinkedIn (117 contacts)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "608f0a20-2c2e-4eb7-9a29-356adec09476",
+      "name": "Lancer enrichissement LinkedIn",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "94bbdc17-d3ad-4d99-a597-72331e79f40b",
+      "name": "Preparer la liste 117 contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const contacts = [\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Yann Garff\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Stephane Gautrais\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Clement Cabot\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Helene Guillemette\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nasser Bouallag\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Benoit Pedoussaut\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Daniel Murciano\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Massiet Antoine\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"PRENOM Leclerc\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Luc Schneider\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Helene Ruys\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nasire Khudoos\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Alexandra Grondin\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Olivier Michaut\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Mikyas Tadesse\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Thomas Auger\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Elsa Martinico\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Juliette Dufourmantelle\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Pierre Cerdan\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Sebastien Boy\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Guillaume Caudron\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Lea Nabonne\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Maxime Uribes\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Sylvain Beck\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Clara Lanuque\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Lois Phene\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Thierry Limentour\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Julien Havet\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Cedric Sarda\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Arnaud Lemercier\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Dominique Dreuil\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Jacqueline Meton\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Michael Andrianjafy\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Marina Normand\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Margot Michel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Astrid Lacant\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Valentin Cattan\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Thierry Aquilina\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Gulliana Gustave\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Marc Fabbro\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nadia Barakati\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Regis G\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nicolas Laurencon\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Sylvain Mallet\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Mohamed Ferrane\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Francois Tournemire\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Jackson Edmorin\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Margaux Laplaine\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Delphine Etienne\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Pierre-Etienne Aubin\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Bruno Turpin\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Matthieu Fourtier\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Christelle Bouleau\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Benjamin Meilhac\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Otman Ahniche\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Damien Cegielski\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Abdelghani Kefi\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Emmanuelle Vigour\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Sofiane Mohammed\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Mohamed B\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Jasminka Pejanovic\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Malik Rezkallah\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Leslie Roy\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Yasmine Betrouni\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Mohamed Boukhechem\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Cedric Serre\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Sandra Muriel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Jorge Silva\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Eric Laforest\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Jeremy Bourlet\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Yann Fernandez\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Stubbe Vincent\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Rollin Michel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Johann Morel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Anthony Leroy\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nicolas Obry\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Eric Claquin\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Benoit Riand\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Marie Bineau\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Benjamin Gay\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Mathilde Natteau\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nan Zhang\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Soufiane Lamchaouri\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Anass Thami\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Yassine Handaoui\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Ogier Dolle\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Ludovic Liaudet\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Mohamed Harbaoui\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Laetitia Ferreira\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Antoine Morcel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Kelvin Harivel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Kelvin Quentrec\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"PRENOM Roche\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Maxence Roche\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Alexandre Napolitano\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Celine Boil\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"\",\"name\":\"Cristina Iuhasz\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Victoire Totah\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Martin Meyrier\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Claire Gerber\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Julien Boucly\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Yannick Bonjean\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Jerome Morroni\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Samantha Rich\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Benoit Valla\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Nicolas Denisse\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Caroline Orban\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Adrienn Toussaint\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Yannis Gerault\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Alvaro Leite\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Guillaume Dubois\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Elena Djakovitch\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Florence Augustyniak\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Bernadette Andrieux\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Marion Guillemot\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"David Estournel\"},\n  {\"id\":\"000000000000000000000000\",\"email\":\"REMPLACER\",\"name\":\"Eric Faule\"}\n];\nconsole.log('Total contacts:', contacts.length);\nreturn contacts.map(c => ({ json: c }));"
+      }
+    },
+    {
+      "id": "ed42e920-8127-40d6-8524-f0471f496914",
+      "name": "Termine",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        -100
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "message",
+              "value": "Termine. Voir les resultats dans le node Parser reponse.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "50a1906b-74b8-45c9-b9ec-e775743100de",
+      "name": "Construire payload Apollo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst details = items.map(item => ({\n  id: item.json.id,\n  email: item.json.email || undefined,\n  name: item.json.name || undefined\n}));\nreturn [{\n  json: {\n    payload: { details: details },\n    contacts_input: items.map(i => i.json)\n  }\n}];"
+      }
+    },
+    {
+      "id": "682e9a44-8263-477c-9e87-f4586d5edcc2",
+      "name": "Apollo bulk_match (LinkedIn)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/bulk_match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "35250584-d4e2-442e-a85b-ecc28dd185c9",
+      "name": "Parser reponse (LinkedIn)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst records = data.matches || data.people || [];\nconst inputContacts = $('Construire payload Apollo').first().json.contacts_input || [];\n\nconst results = [];\nfor (let i = 0; i < records.length; i++) {\n  const m = records[i] || {};\n  const original = inputContacts[i] || {};\n  results.push({\n    json: {\n      contact_id: original.id,\n      name: original.name,\n      email: original.email,\n      apollo_id: m.id || '',\n      linkedin_url: m.linkedin_url || '',\n      twitter_url: m.twitter_url || '',\n      github_url: m.github_url || '',\n      facebook_url: m.facebook_url || '',\n      city: m.city || '',\n      state: m.state || '',\n      country: m.country || '',\n      seniority: m.seniority || '',\n      headline: m.headline || '',\n      photo_url: m.photo_url || '',\n      status: m.linkedin_url ? 'success' : 'no_linkedin'\n    }\n  });\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "28907c0b-e4e4-4043-991a-12ab4598e200",
+      "name": "Batches de 10",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Lancer enrichissement LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Preparer la liste 117 contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer la liste 117 contacts": {
+      "main": [
+        [
+          {
+            "node": "Batches de 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire payload Apollo": {
+      "main": [
+        [
+          {
+            "node": "Apollo bulk_match (LinkedIn)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo bulk_match (LinkedIn)": {
+      "main": [
+        [
+          {
+            "node": "Parser reponse (LinkedIn)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser reponse (LinkedIn)": {
+      "main": [
+        [
+          {
+            "node": "Batches de 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batches de 10": {
+      "main": [
+        [
+          {
+            "node": "Termine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Construire payload Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "tags": []
+}

@@ -1,0 +1,156 @@
+{
+  "name": "Pipeline - Ecriture manutention (acme) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.id_prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.entreprise }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.domaine }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json.secteur }}"
+            },
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.decideur }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.poste }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.linkedin }}"
+            },
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.telephone }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $json.source }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -352
+      ],
+      "id": "023d9399-c2e9-4c24-ba41-39edcee27065",
+      "name": "Ecrire acme manutention",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "1b390b35-66f7-462c-8c6b-3841d8c5f543",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -352
+      ],
+      "id": "9ccfcd99-3c54-43bb-97a9-476c846d6757",
+      "name": "Webhook1",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.contacts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -352
+      ],
+      "id": "654725ca-b238-4d88-910c-fc21b6ed6993",
+      "name": "Split Out contacts1"
+    }
+  ],
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Split Out contacts1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out contacts1": {
+      "main": [
+        [
+          {
+            "node": "Ecrire acme manutention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

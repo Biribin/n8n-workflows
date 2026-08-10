@@ -1,0 +1,2251 @@
+{
+  "name": "PRENOM com",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/v1/organizations/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": {{ $json.page }},\n  \"per_page\": 10,\n  \"organization_locations\": [\"{{ $('Code in JavaScript').item.json.country }}\"],\n  \"organization_num_employees_ranges\": [\n    \"1-10\",\n    \"11-50\",\n    \"51-200\",\n    \"201-500\",\n    \"500-1000\"\n  ],\n  \"q_organization_keyword_tags\": [\n    \"{{ $('On form submission').item.json['mot clef'] }}\"\n  ]\n}\n",
+        "options": {}
+      },
+      "id": "fe04776d-ac53-45c1-b970-ee937bb14f1d",
+      "name": "Scrape Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        160,
+        384
+      ],
+      "typeVersion": 4.2,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "formTitle": "Leads Search",
+        "formDescription": "🔍 Remplissez ce formulaire pour obtenir une liste de contacts qualifiés selon un mot clef ou une entreprise. Résultats livrés en quelques minutes.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "mot clef",
+              "placeholder": "Airlines, Aviation, Aerospace, Transportation, Trucking, Railroad, Logistics, Supply Chain, Security, Warehousing, Freight Delivery.."
+            },
+            {
+              "fieldLabel": "nom d'entreprise",
+              "placeholder": "Alyzia, Air France"
+            },
+            {
+              "fieldLabel": "pays",
+              "fieldType": "dropdown",
+              "defaultValue": "Belgique",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "France"
+                  },
+                  {
+                    "option": "Belgique"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9850afe8-095a-4cac-a6f7-7324a685e82c",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [
+        -1552,
+        896
+      ],
+      "webhookId": "A_REGENERER",
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const form = $('On form submission').first().json;\nconst company = (form[\"nom d'entreprise\"] || \"\").trim();\nconst pays = (form[\"pays\"] || \"\").trim();\n\nconst countryMap = { 'france': 'France', 'belgique': 'Belgium' };\nconst country = countryMap[pays.toLowerCase()] || pays;\n\nif (company !== \"\") {\n  return [{ json: { type: \"company\", value: company, country }}];\n}\n\ntry {\n  const translatedKeywords = $('Basic LLM Chain').first().json.text.trim();\n  if (translatedKeywords !== \"\") {\n    return [{ json: { type: \"keywords\", value: translatedKeywords, country }}];\n  }\n} catch (e) {}\n\nthrow new Error(\"Veuillez entrer un nom d'entreprise ou des mots-clés.\");"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        864
+      ],
+      "id": "b9948d86-b35c-4b61-a493-94fc76846246",
+      "name": "Code in JavaScript",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "45007508-2e8b-4b7c-b603-205817b9d1fb",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "keywords",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -288,
+        864
+      ],
+      "id": "2ce971a4-47eb-44f1-898f-6d87fad79030",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1504,
+        432
+      ],
+      "id": "34c68ffc-d552-4ee5-a87b-7cbbbe0b0cd6",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $json.domain }}\"],\n\"person_titles\": [\n    \"HR\",\n    \"Operations\",\n    \"Commercial\",\n    \"Sales\",\n    \"Training\",\n    \"Manager\",\n    \"Director\"\n  ],\n  \"person_seniorities\": [\n\"owner\",\n\"founder\",\n\"senior\",\n    \"manager\",\n    \"director\",\n    \"vp\",\n    \"head\"\n  ],\n  \"contact_email_status\": [\"verified\",\"unverified\",\n\"likely to engage\"]\n}\n",
+        "options": {}
+      },
+      "id": "5edab518-89fa-429d-a4d3-a1823738382c",
+      "name": "Scrape Leads2",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1824,
+        496
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "=https://api.apollo.io/v1/organizations/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 5,\n  \"q_organization_name\": \"{{$json.value}}\"\n}\n",
+        "options": {}
+      },
+      "id": "9b1df067-e2b0-49b8-ac44-eb63003baeba",
+      "name": "Scrape Leads3",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -64,
+        1392
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "let results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n  \n  for (const p of people) {\n    results.push({\n      json: {\n        id: p.id,\n        firstName: p.first_name,\n        lastName: p.last_name,\n        title: p.title,\n        company: p.organization?.name || \"\",\n        companyDomain: p.organization?.domain || \"\",\n        hasEmail: p.has_email,\n        hasPhone: p.has_direct_phone,\n      }\n    });\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        464
+      ],
+      "id": "7900dd3f-d42b-4730-a511-044147513796",
+      "name": "Code in JavaScript1",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apollo renvoie un tableau sous $json.organizations\nconst orgs = $json.organizations || [];\n\n// On récupère tous les primary_domain non-nuls\nlet domains = orgs\n  .map(o => o.primary_domain)          // récupérer le domaine\n  .filter(d => d && d.trim() !== \"\")   // supprimer les null / vides\n  .map(d => d.toLowerCase().trim());   // normalisation\n\n// On supprime les doublons\ndomains = [...new Set(domains)];\n\n// On renvoie un item par domaine pour Split In Batches\nreturn domains.map(domain => ({\n  json: { domain }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        192
+      ],
+      "id": "82ccc70e-69fc-4c8f-a779-a75645efa286",
+      "name": "Code in JavaScript2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/match",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "reveal_personal_emails",
+              "value": "true"
+            },
+            {
+              "name": "reveal_phone_number",
+              "value": "false"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6ee6c470-e551-4990-ab6d-822eaefc2827",
+      "name": "Get Email from Apollo",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        3072,
+        848
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const p = item.json.person || {};\n\n  return {\n    json: {\n      id: p.id,\n      firstName: p.first_name,\n      lastName: p.last_name,\n      title: p.title,\n      description:p.organization?.short_description|| \"\",\n\n      // Email pro\n      workEmail: p.email || \"\",\n\n      // Entreprise\n      company: p.organization?.name || \"\",\n      companyDomain: p.organization?.primary_domain || \"\",\n\n      // LinkedIn\n      linkedin: p.linkedin_url || \"\",\n      companyLinkedin: p.organization?.linkedin_url || \"\"\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3296,
+        848
+      ],
+      "id": "8d7e988f-ba0d-40d5-aac7-9dbe0f8d4dad",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\":  {{ $json.page }},\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $('Scrape Leads3').item.json.organizations[0].website_url }}\"],\n\"person_titles\": [\n    \"HR\",\n    \"Operations\",\n    \"Commercial\",\n    \"Sales\",\n    \"Training\",\n    \"Manager\",\n    \"Director\"\n  ],\n  \"person_seniorities\": [\n    \"owner\",\n    \"founder\",\n    \"senior\",\n    \"manager\",\n    \"director\",\n    \"vp\",\n    \"head\"\n  ],\n  \"contact_email_status\": [\"verified\",\"unverified\",\n\"likely to engage\"]\n}\n",
+        "options": {}
+      },
+      "id": "94981c5c-be03-4b01-ad38-db4e1fc1bae8",
+      "name": "Scrape Leads4",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        384,
+        1392
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1280,
+        1008
+      ],
+      "id": "33d9a6c0-ac8f-4e44-9475-1005564d9323",
+      "name": "Merge",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1504,
+        1008
+      ],
+      "id": "6e60a7cf-5334-4f3e-ba4a-332c3a474a6d",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": {{ $json.page }},\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $('Scrape Leads3').item.json.organizations[0].website_url }}\"],\n  \"contact_email_status\": [\"verified\",\"unverified\",\n\"likely to engage\"]\n}\n",
+        "options": {}
+      },
+      "id": "98e965c0-8043-4e30-9384-e4c4585957c2",
+      "name": "Scrape Leads6",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1952,
+        1088
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2624,
+        1008
+      ],
+      "id": "34bebc37-4c00-4f49-bc25-618ef861dbc3",
+      "name": "Merge1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eb553ad4-71e6-4b7d-b38d-d429c86080b9",
+              "leftValue": "={{ $items(\"Code in JavaScript15\").length }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        1248
+      ],
+      "id": "80e5ab58-7018-4f0d-8e54-c6d30cfbe56b",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "jsCode": "let page = 1;\n\ntry {\n  const previousItems = $items(\"Code in JavaScript10\");\n  if (previousItems.length > 0) {\n    page = previousItems[previousItems.length - 1].json.page || 1;\n  }\n} catch (e) {\n  page = 1;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  if (people.length === 0) {\n    // 🔴 S'il n'y a personne → on retourne juste la page\n    results.push({\n      json: {\n        page: page\n      }\n    });\n  } else {\n    for (const p of people) {\n      results.push({\n        json: {\n          page: page,\n          id: p.id,\n          first_name: p.first_name,\n          last_name: p.last_name,\n          title: p.title,\n          company: p.organization?.name || \"\"\n        }\n      });\n    }\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        1008
+      ],
+      "id": "d4287d71-106f-415c-9b7f-da687a95ef1b",
+      "name": "Code in JavaScript8",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2848,
+        1008
+      ],
+      "id": "e67a8c67-e1f2-4640-b8c3-59d1169483c6",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const page = $('Code in JavaScript8').last().json.page || 1;\n\nreturn [{\n  json: {\n    page: page + 1\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        1056
+      ],
+      "id": "13da5e16-aeed-4543-99ef-d92d88c5c6f1",
+      "name": "Code in JavaScript10"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    page:1 ,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        1088
+      ],
+      "id": "13635ea0-3205-4406-ada1-0af93fe3d679",
+      "name": "Code in JavaScript11"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n\nconst results = [];\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  for (const p of people) {\n    results.push({\n      json: {\n      \n        id: p.id,\n        first_name: p.first_name,\n        last_name: p.last_name,\n        title: p.title,\n        company: p.organization?.name || \"\"\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        800
+      ],
+      "id": "415a84ff-5206-4b6a-906c-a6ed83211fe6",
+      "name": "Code in JavaScript12"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "396ef298-a94c-4e46-8aa8-e0d5df8ceaa7",
+              "leftValue": "={{ $json.page }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3296,
+        1184
+      ],
+      "id": "e454aca6-1989-469d-9bf9-d24cbb9349df",
+      "name": "If5"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1280,
+        1440
+      ],
+      "id": "4d61cca6-42e4-4199-87d9-f826ac5f5406",
+      "name": "Merge2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1504,
+        1440
+      ],
+      "id": "3273d46e-7439-424d-9a67-642fe0716f24",
+      "name": "If6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const page = $('Code in JavaScript15').last().json.page || 1;\n\nreturn [{\n  json: {\n    page: page + 1\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        1472
+      ],
+      "id": "3a2df3d6-5329-4bba-85f1-f65b57d0bcbe",
+      "name": "Code in JavaScript14"
+    },
+    {
+      "parameters": {
+        "jsCode": "let page = 1;\n\ntry {\n  const previousItems = $items(\"Code in JavaScript14\");\n  if (previousItems.length > 0) {\n    page = previousItems[previousItems.length - 1].json.page || 1;\n  }\n} catch (e) {\n  page = 1;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  if (people.length === 0) {\n    // 🔴 S'il n'y a personne → on retourne juste la page\n    results.push({\n      json: {\n        page: page\n      }\n    });\n  } else {\n    for (const p of people) {\n      results.push({\n        json: {\n          page: page,\n          id: p.id,\n          first_name: p.first_name,\n          last_name: p.last_name,\n          title: p.title,\n          company: p.organization?.name || \"\"\n        }\n      });\n    }\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        1248
+      ],
+      "id": "a2ae5fe8-7c7e-4545-8a36-fb691ba3f828",
+      "name": "Code in JavaScript15",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "396ef298-a94c-4e46-8aa8-e0d5df8ceaa7",
+              "leftValue": "={{ $json.page }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1952,
+        1584
+      ],
+      "id": "515770fd-41d4-4ffa-8382-5883efcd80e3",
+      "name": "If7"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    page:1 ,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        1392
+      ],
+      "id": "a1a748e6-ecae-418d-b9ab-89dfbe996e37",
+      "name": "Code in JavaScript16"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "domain",
+              "field2": "companyDomain"
+            }
+          ]
+        },
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1056,
+        256
+      ],
+      "id": "2b122779-8545-4d4c-a2b0-871791224089",
+      "name": "Merge3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{ $json.domain }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1280,
+        272
+      ],
+      "id": "c0fe7952-8a27-41de-8931-2e0a8d5f57d4",
+      "name": "If8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const page = $('Code in JavaScript18').last().json.page || 1;\n\nreturn [{\n  json: {\n    page: page + 1\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        80
+      ],
+      "id": "5f38c859-f95c-461d-aa71-a881f9ec8b7a",
+      "name": "Code in JavaScript17"
+    },
+    {
+      "parameters": {
+        "jsCode": "let page = 1;\n\ntry {\n  const previousItems = $items(\"Code in JavaScript17\");\n  if (previousItems.length > 0) {\n    page = previousItems[previousItems.length - 1].json.page || 1;\n  }\n} catch (e) {\n  page = 1;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  if (people.length === 0) {\n    // 🔴 S'il n'y a personne → on retourne juste la page\n    results.push({\n      json: {\n        page: page\n      }\n    });\n  } else {\n    for (const p of people) {\n      results.push({\n        json: {\n          page: page,\n          id: p.id,\n          first_name: p.first_name,\n          last_name: p.last_name,\n          title: p.title,\n          company: p.organization?.name || \"\"\n        }\n      });\n    }\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        384
+      ],
+      "id": "fc40b8ea-c0f5-4463-afd5-738d8a78ba52",
+      "name": "Code in JavaScript18",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "396ef298-a94c-4e46-8aa8-e0d5df8ceaa7",
+              "leftValue": "={{ $json.page }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3072,
+        384
+      ],
+      "id": "7248ec43-99c5-4c54-af58-d1f719030c24",
+      "name": "If9"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 10,\n  \"q_organization_domains_list\": [\"{{ $('If8').item.json.domain }}\"],\n  \"contact_email_status\": [\"verified\",\"unverified\",\n\"likely to engage\"]\n}\n",
+        "options": {}
+      },
+      "id": "2e7a96e7-8c1f-4297-b047-3a942210f2ed",
+      "name": "Scrape Leads7",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1984,
+        32
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "62b170da-1362-4ac6-9c87-93efc5399ab2",
+              "leftValue": "={{ $json.total_entries }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1728,
+        288
+      ],
+      "id": "d27bad03-9294-48f8-845e-4b24f7c3e299",
+      "name": "If11"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "62b170da-1362-4ac6-9c87-93efc5399ab2",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2624,
+        224
+      ],
+      "id": "6b7cc92d-9532-45b3-983e-ba7c58fc4635",
+      "name": "If12"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2400,
+        224
+      ],
+      "id": "fd40d5b3-c7ae-452d-a1fe-35e7fc2ec2f2",
+      "name": "Merge4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "10e31789-027f-4a5d-aa6a-14cc123c52f2",
+              "leftValue": "={{ $json.domain }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        608,
+        256
+      ],
+      "id": "c7558cd8-cb5c-487b-908c-6eb93afb22b3",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "id",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "firstName",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "lastName",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "title",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "workemail",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "linkedin",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "company",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "companyDomain",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "companyLinkedin",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        48
+      ],
+      "id": "cd123428-cb6b-4b2c-be69-87674eae2d51",
+      "name": "Append row in sheet7",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        512
+      ],
+      "id": "9e41a3ad-904d-43af-ade3-1906b1a7ddc5",
+      "name": "Get row(s) in sheet9",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1056,
+        1184
+      ],
+      "id": "3742e9f6-0fdf-42cf-8f75-61e545a59d0e",
+      "name": "Get row(s) in sheet1",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1056,
+        1472
+      ],
+      "id": "2446b51c-6e99-4a59-8296-2827f9c70eb9",
+      "name": "Get row(s) in sheet2",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        2400,
+        1056
+      ],
+      "id": "66a3d424-a37d-4f3c-9904-d65b37a425bf",
+      "name": "Get row(s) in sheet",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        2176,
+        272
+      ],
+      "id": "15f348d2-8835-471d-89f0-3d6fbf5efcda",
+      "name": "Get row(s) in sheet4",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "id",
+              "fieldValue": "={{ $json.id }}"
+            },
+            {
+              "column": "firstName",
+              "fieldValue": "={{ $json.firstName }}"
+            },
+            {
+              "column": "lastName",
+              "fieldValue": "={{ $json.lastName }}"
+            },
+            {
+              "column": "title",
+              "fieldValue": "={{ $json.title }}"
+            },
+            {
+              "column": "workemail",
+              "fieldValue": "={{ $json.workEmail }}"
+            },
+            {
+              "column": "linkedin",
+              "fieldValue": "={{ $json.linkedin }}"
+            },
+            {
+              "column": "company",
+              "fieldValue": "={{ $json.company }}"
+            },
+            {
+              "column": "companyDomain",
+              "fieldValue": "={{ $json.companyDomain }}"
+            },
+            {
+              "column": "companyLinkedin",
+              "fieldValue": "={{ $json.companyLinkedin }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        3520,
+        848
+      ],
+      "id": "14394a66-88e5-4c3f-8b97-905fa6035e95",
+      "name": "Append row in sheet9",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "id",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "firstName",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "lastName",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "title",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "workemail",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "linkedin",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "company",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "companyDomain",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            },
+            {
+              "column": "companyLinkedin",
+              "fieldValue": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        3296,
+        384
+      ],
+      "id": "30ccbffe-dab2-415d-a985-6da9c5c96113",
+      "name": "Append row in sheet2",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "id",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "firstName",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "lastName",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "title",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "workemail",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "linkedin",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "company",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "companyDomain",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            },
+            {
+              "column": "companyLinkedin",
+              "fieldValue": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        3520,
+        1392
+      ],
+      "id": "bf5cad26-1c14-437b-a4f0-328d8c028844",
+      "name": "Append row in sheet11",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json[\"mot clef\"] }}",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Translate the following French keywords to English. Return ONLY the translated keywords, nothing else:{{ $json[\"mot clef\"] }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -1120,
+        784
+      ],
+      "id": "cdab2d20-4f67-49c1-b3d2-a83e2c0c9f01",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        -1040,
+        1104
+      ],
+      "id": "4c9a56bf-79cf-4a2f-9f59-9f43e30f24b6",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "A_RECONNECTER",
+          "name": "anthropicApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        -1248,
+        1088
+      ],
+      "id": "b31364b2-bc58-4844-b16c-855007252945",
+      "name": "Anthropic Chat Model1",
+      "credentials": {
+        "anthropicApi": {
+          "id": "A_RECONNECTER",
+          "name": "anthropicApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8c50a452-070c-4280-aba5-b8786d0ff15f",
+              "leftValue": "={{ $json[\"mot clef\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1360,
+        896
+      ],
+      "id": "acdd6532-51c9-4516-bcc8-75aa9c8c3f0a",
+      "name": "If10"
+    }
+  ],
+  "connections": {
+    "Scrape Leads": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "If10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript18",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "If11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript16",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Email from Apollo": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads6": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript12",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript10": {
+      "main": [
+        [
+          {
+            "node": "If5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript11": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript12": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If5": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "If6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If6": {
+      "main": [
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript14": {
+      "main": [
+        [
+          {
+            "node": "If7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript15": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If7": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript16": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "If8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If8": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript17",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript17": {
+      "main": [
+        [
+          {
+            "node": "If9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript18": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If9": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript18",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads7": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If11": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If12": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript17",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "If12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet7": {
+      "main": [
+        []
+      ]
+    },
+    "Get row(s) in sheet9": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet2": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet4": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If10": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedPerExecution": 10
+  },
+  "tags": []
+}

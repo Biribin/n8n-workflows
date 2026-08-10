@@ -1,0 +1,2335 @@
+{
+  "name": "ANCIEN SCRAPER",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/v1/organizations/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": {{ $json.page }},\n  \"per_page\": 10,\n  \"organization_locations\": [\"France\"],\n  \"organization_num_employees_ranges\": [\n    \"1-10\",\n    \"11-50\",\n    \"51-200\",\n    \"201-500\",\n    \"500-1000\"\n  ],\n  \"q_organization_keyword_tags\": [\n    \"{{ $('On form submission').item.json['mot clef'] }}\"\n  ]\n}\n",
+        "options": {}
+      },
+      "id": "a2bcd3b8-8070-4fc1-9211-b378619e7b71",
+      "name": "Scrape Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -400,
+        400
+      ],
+      "typeVersion": 4.2,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "formTitle": "Leads Search",
+        "formDescription": "🔍 Remplissez ce formulaire pour obtenir une liste de contacts qualifiés selon un mot clef ou une entreprise. Résultats livrés en quelques minutes.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "mot clef",
+              "placeholder": "Airlines, Aviation, Aerospace, Transportation, Trucking, Railroad, Logistics, Supply Chain, Security, Warehousing, Freight Delivery.."
+            },
+            {
+              "fieldLabel": "nom d'entreprise",
+              "placeholder": "Alyzia, Air France"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44306b4a-b3af-437a-aa1b-45b18777e5ed",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [
+        -1216,
+        816
+      ],
+      "webhookId": "A_REGENERER",
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const form = $('On form submission').first().json;\n\nconst company = (form[\"nom d'entreprise\"] || \"\").trim();\nconst mots = (form[\"mot clef\"] || \"\").trim();\n\nif (company !== \"\") {\n  return [{ json: { type: \"company\", value: company }}];\n}\n\nif (mots !== \"\") {\n  return [{ json: { type: \"keywords\", value: mots }}];\n}\n\nthrow new Error(\"Veuillez entrer un nom d'entreprise ou des mots-clés.\");\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -992,
+        816
+      ],
+      "id": "81260bda-f589-49eb-b3c5-ca3dfcf26128",
+      "name": "Code in JavaScript",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "45007508-2e8b-4b7c-b603-205817b9d1fb",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "keywords",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -768,
+        816
+      ],
+      "id": "c728141a-f39a-4a93-993b-9c30d1be5c4b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        800,
+        400
+      ],
+      "id": "781dd7d5-1274-452f-9354-d695329739d8",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $json.domain }}\"],\n\"person_titles\": [\n    \"HR\",\n    \"Operations\",\n    \"Commercial\",\n    \"Sales\",\n    \"Training\",\n    \"Manager\",\n    \"Director\"\n  ],\n  \"person_seniorities\": [\n\"owner\",\n\"founder\",\n\"senior\",\n    \"manager\",\n    \"director\",\n    \"vp\",\n    \"head\"\n  ],\n  \"contact_email_status\": [\"verified\"]\n}\n",
+        "options": {}
+      },
+      "id": "5f042487-900d-4a83-af03-322842570f57",
+      "name": "Scrape Leads2",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1024,
+        480
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "=https://api.apollo.io/v1/organizations/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 5,\n  \"q_organization_name\": \"{{$json.value}}\"\n}\n",
+        "options": {}
+      },
+      "id": "f47ab862-0b27-4e4a-8101-e90210c00832",
+      "name": "Scrape Leads3",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -544,
+        1376
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "let results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n  \n  for (const p of people) {\n    results.push({\n      json: {\n        id: p.id,\n        firstName: p.first_name,\n        lastName: p.last_name,\n        title: p.title,\n        company: p.organization?.name || \"\",\n        companyDomain: p.organization?.domain || \"\",\n        hasEmail: p.has_email,\n        hasPhone: p.has_direct_phone,\n      }\n    });\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        352
+      ],
+      "id": "c45f6171-86b5-4d75-8d56-4133a6be0bcc",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apollo renvoie un tableau sous $json.organizations\nconst orgs = $json.organizations || [];\n\n// On récupère tous les primary_domain non-nuls\nlet domains = orgs\n  .map(o => o.primary_domain)          // récupérer le domaine\n  .filter(d => d && d.trim() !== \"\")   // supprimer les null / vides\n  .map(d => d.toLowerCase().trim());   // normalisation\n\n// On supprime les doublons\ndomains = [...new Set(domains)];\n\n// On renvoie un item par domaine pour Split In Batches\nreturn domains.map(domain => ({\n  json: { domain }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        288
+      ],
+      "id": "ec98299c-0fdf-42ce-9839-ad2be8c3e91a",
+      "name": "Code in JavaScript2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/match",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "reveal_personal_emails",
+              "value": "true"
+            },
+            {
+              "name": "reveal_phone_number",
+              "value": "false"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0c707854-16c2-4015-98b0-4ce7b3c595b5",
+      "name": "Get Email from Apollo",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2592,
+        432
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const p = item.json.person || {};\n\n  return {\n    json: {\n      id: p.id,\n      firstName: p.first_name,\n      lastName: p.last_name,\n      title: p.title,\n      description:p.organization?.short_description|| \"\",\n\n      // Email pro\n      workEmail: p.email || \"\",\n\n      // Entreprise\n      company: p.organization?.name || \"\",\n      companyDomain: p.organization?.primary_domain || \"\",\n\n      // LinkedIn\n      linkedin: p.linkedin_url || \"\",\n      companyLinkedin: p.organization?.linkedin_url || \"\"\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2816,
+        432
+      ],
+      "id": "a21bc9e3-1862-4c0f-8c2d-f2f500eab208",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "firstName": "={{ $json.firstName }}",
+            "lastName": "={{ $json.lastName }}",
+            "title": "={{ $json.title }}",
+            "workemail": "={{ $json.workEmail }}",
+            "company": "={{ $json.company }}",
+            "companyDomain": "={{ $json.companyDomain }}",
+            "linkedin": "={{ $json.linkedin }}",
+            "companyLinkedin": "={{ $json.companyLinkedin }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workemail",
+              "displayName": "workemail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "linkedin",
+              "displayName": "linkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "companyDomain",
+              "displayName": "companyDomain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "companyLinkedin",
+              "displayName": "companyLinkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "companydescription",
+              "displayName": "companydescription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2992,
+        432
+      ],
+      "id": "b889d05b-ee15-44df-8081-4cebd35af6b7",
+      "name": "Append row in sheet",
+      "executeOnce": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\":  {{ $json.page }},\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $('Scrape Leads3').item.json.organizations[0].website_url }}\"],\n\"person_titles\": [\n    \"HR\",\n    \"Operations\",\n    \"Commercial\",\n    \"Sales\",\n    \"Training\",\n    \"Manager\",\n    \"Director\"\n  ],\n  \"person_seniorities\": [\n    \"owner\",\n    \"founder\",\n    \"senior\",\n    \"manager\",\n    \"director\",\n    \"vp\",\n    \"head\"\n  ],\n  \"contact_email_status\": [\"verified\"]\n}\n",
+        "options": {}
+      },
+      "id": "25877995-3eff-4ea6-bf22-a7060eb3879e",
+      "name": "Scrape Leads4",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -96,
+        1376
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        800,
+        960
+      ],
+      "id": "28d50022-6817-4033-a747-75fa332af57e",
+      "name": "Merge",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1024,
+        960
+      ],
+      "id": "52fceb99-15d9-4e08-932c-ea215a164ddd",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": {{ $json.page }},\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $('Scrape Leads3').item.json.organizations[0].website_url }}\"],\n  \"contact_email_status\": [\"verified\"]\n}\n",
+        "options": {}
+      },
+      "id": "990c42ba-671c-4808-a37c-61bb06791a03",
+      "name": "Scrape Leads6",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1472,
+        1024
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2144,
+        960
+      ],
+      "id": "7aadc391-36f0-411c-b451-200517d09a98",
+      "name": "Merge1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eb553ad4-71e6-4b7d-b38d-d429c86080b9",
+              "leftValue": "={{ $items(\"Code in JavaScript15\").length }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        352,
+        1232
+      ],
+      "id": "4b1e75bf-3839-44fc-8fb0-dddb10c0a1e3",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "jsCode": "let page = 1;\n\ntry {\n  const previousItems = $items(\"Code in JavaScript10\");\n  if (previousItems.length > 0) {\n    page = previousItems[previousItems.length - 1].json.page || 1;\n  }\n} catch (e) {\n  page = 1;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  if (people.length === 0) {\n    // 🔴 S'il n'y a personne → on retourne juste la page\n    results.push({\n      json: {\n        page: page\n      }\n    });\n  } else {\n    for (const p of people) {\n      results.push({\n        json: {\n          page: page,\n          id: p.id,\n          first_name: p.first_name,\n          last_name: p.last_name,\n          title: p.title,\n          company: p.organization?.name || \"\"\n        }\n      });\n    }\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        960
+      ],
+      "id": "e6d9ceb7-7608-484a-ab97-721ebfb36ecc",
+      "name": "Code in JavaScript8",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2368,
+        960
+      ],
+      "id": "9627435a-11ef-43ce-8015-6865f45c0e1c",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const page = $('Code in JavaScript8').last().json.page || 1;\n\nreturn [{\n  json: {\n    page: page + 1\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        1008
+      ],
+      "id": "37e6f6e0-b424-4dfa-ad8e-cff8da699a8d",
+      "name": "Code in JavaScript10"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    page:1 ,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        1024
+      ],
+      "id": "b9d7d659-d87a-4eb7-befc-f61febd25b17",
+      "name": "Code in JavaScript11"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n\nconst results = [];\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  for (const p of people) {\n    results.push({\n      json: {\n      \n        id: p.id,\n        first_name: p.first_name,\n        last_name: p.last_name,\n        title: p.title,\n        company: p.organization?.name || \"\"\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        784
+      ],
+      "id": "23f4caa4-fda1-4149-b347-5fc5277e7aab",
+      "name": "Code in JavaScript12"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "396ef298-a94c-4e46-8aa8-e0d5df8ceaa7",
+              "leftValue": "={{ $json.page }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2816,
+        1136
+      ],
+      "id": "10f879e8-2c49-4621-b130-4a798fdbd304",
+      "name": "If5"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "firstName": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "lastName": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "title": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "workemail": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "linkedin": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "company": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "companyDomain": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}",
+            "companyLinkedin": "=no more result for  {{ $('On form submission').item.json['nom d\\'entreprise'] }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workemail",
+              "displayName": "workemail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "linkedin",
+              "displayName": "linkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "companyDomain",
+              "displayName": "companyDomain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "companyLinkedin",
+              "displayName": "companyLinkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3040,
+        1344
+      ],
+      "id": "f657f676-d89e-48fc-b401-23d736348527",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        800,
+        1424
+      ],
+      "id": "545cce81-94f0-453b-9113-8c994e6ae76e",
+      "name": "Merge2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1968,
+        1408
+      ],
+      "id": "45735c26-c7fc-49b5-876a-f8a0e9e021c9",
+      "name": "If6"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        1152
+      ],
+      "id": "d972ed8f-5bb8-42e5-b21f-da8093be12a5",
+      "name": "Get row(s) in sheet1",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        1440
+      ],
+      "id": "44fdcf82-4a70-40ca-be5c-70030e02ad5a",
+      "name": "Get row(s) in sheet2",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1920,
+        1008
+      ],
+      "id": "48e96ca7-4168-4ce5-b4e9-75cfdbcd74c6",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const page = $('Code in JavaScript15').last().json.page || 1;\n\nreturn [{\n  json: {\n    page: page + 1\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        1440
+      ],
+      "id": "af80f243-076c-4399-a1d2-a081f5aa19be",
+      "name": "Code in JavaScript14"
+    },
+    {
+      "parameters": {
+        "jsCode": "let page = 1;\n\ntry {\n  const previousItems = $items(\"Code in JavaScript14\");\n  if (previousItems.length > 0) {\n    page = previousItems[previousItems.length - 1].json.page || 1;\n  }\n} catch (e) {\n  page = 1;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  if (people.length === 0) {\n    // 🔴 S'il n'y a personne → on retourne juste la page\n    results.push({\n      json: {\n        page: page\n      }\n    });\n  } else {\n    for (const p of people) {\n      results.push({\n        json: {\n          page: page,\n          id: p.id,\n          first_name: p.first_name,\n          last_name: p.last_name,\n          title: p.title,\n          company: p.organization?.name || \"\"\n        }\n      });\n    }\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        1232
+      ],
+      "id": "8f856126-6d0a-43b2-8ff6-855998f7c2be",
+      "name": "Code in JavaScript15",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "396ef298-a94c-4e46-8aa8-e0d5df8ceaa7",
+              "leftValue": "={{ $json.page }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2816,
+        1568
+      ],
+      "id": "0c135b89-d15f-432b-9b7a-341b7ecf771f",
+      "name": "If7"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    page:1 ,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        1376
+      ],
+      "id": "0d14f315-f5b0-4002-bb23-3c401d8130ec",
+      "name": "Code in JavaScript16"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        128,
+        448
+      ],
+      "id": "f9d09ce5-c19f-4ec4-ac09-897a3aa26427",
+      "name": "Get row(s) in sheet3",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "domain",
+              "field2": "companyDomain"
+            }
+          ]
+        },
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        352,
+        240
+      ],
+      "id": "1b3da683-2976-43d6-9ca4-f2bdc732b410",
+      "name": "Merge3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "78d76ff8-3672-48a5-b6e9-16936be6d2fa",
+              "leftValue": "={{ $json.domain }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        576,
+        240
+      ],
+      "id": "88d32e4f-132c-4667-9fc4-ccdacfeaa876",
+      "name": "If8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const page = $('Code in JavaScript18').last().json.page || 1;\n\nreturn [{\n  json: {\n    page: page + 1\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        48
+      ],
+      "id": "2a3f6245-b48a-4127-9936-3c8f33fd389a",
+      "name": "Code in JavaScript17"
+    },
+    {
+      "parameters": {
+        "jsCode": "let page = 1;\n\ntry {\n  const previousItems = $items(\"Code in JavaScript10\");\n  if (previousItems.length > 0) {\n    page = previousItems[previousItems.length - 1].json.page || 1;\n  }\n} catch (e) {\n  page = 1;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  const people = item.json.people || [];\n\n  if (people.length === 0) {\n    // 🔴 S'il n'y a personne → on retourne juste la page\n    results.push({\n      json: {\n        page: page\n      }\n    });\n  } else {\n    for (const p of people) {\n      results.push({\n        json: {\n          page: page,\n          id: p.id,\n          first_name: p.first_name,\n          last_name: p.last_name,\n          title: p.title,\n          company: p.organization?.name || \"\"\n        }\n      });\n    }\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        352
+      ],
+      "id": "5e94b2d2-f17e-494d-9a7d-fc495e674c7d",
+      "name": "Code in JavaScript18",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "396ef298-a94c-4e46-8aa8-e0d5df8ceaa7",
+              "leftValue": "={{ $json.page }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2368,
+        48
+      ],
+      "id": "2e35b7d3-faa6-4605-a9a0-002f247499ca",
+      "name": "If9"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "firstName": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "lastName": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "title": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "workemail": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "linkedin": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "company": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "companyDomain": "=no more result for {{ $('On form submission').item.json['mot clef'] }}",
+            "companyLinkedin": "=no more result for {{ $('On form submission').item.json['mot clef'] }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workemail",
+              "displayName": "workemail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "linkedin",
+              "displayName": "linkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "companyDomain",
+              "displayName": "companyDomain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "companyLinkedin",
+              "displayName": "companyLinkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2592,
+        48
+      ],
+      "id": "1e6c57bb-fc7a-4810-b06b-12b93542bf7a",
+      "name": "Append row in sheet2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 5,\n  \"q_organization_domains_list\": [\"{{ $('If8').item.json.domain }}\"],\n  \"contact_email_status\": [\"verified\"]\n}\n",
+        "options": {}
+      },
+      "id": "c6155f88-2582-4828-b627-e9345eccabf5",
+      "name": "Scrape Leads7",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1248,
+        192
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "62b170da-1362-4ac6-9c87-93efc5399ab2",
+              "leftValue": "={{ $json.total_entries }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1024,
+        256
+      ],
+      "id": "70839098-57c0-4154-bba3-5d425cba2e23",
+      "name": "If11"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "62b170da-1362-4ac6-9c87-93efc5399ab2",
+              "leftValue": "={{$json.id}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        192
+      ],
+      "id": "3d366728-eed9-4835-a266-9d537bb708d1",
+      "name": "If12"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1696,
+        192
+      ],
+      "id": "9f192842-9d36-4f44-b761-297be6956cf1",
+      "name": "Merge4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1472,
+        256
+      ],
+      "id": "baa4ed30-4612-4ca1-975a-a01f4a2608af",
+      "name": "Get row(s) in sheet4",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "10e31789-027f-4a5d-aa6a-14cc123c52f2",
+              "leftValue": "={{ $json.domain }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e4d0cabf-d53e-4f56-8cf8-a98ce0e8c866",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "firstName": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "lastName": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "title": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "workemail": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "linkedin": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "company": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "companyDomain": "=no result  {{ $('On form submission').item.json['mot clef'] }}",
+            "companyLinkedin": "=no result  {{ $('On form submission').item.json['mot clef'] }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workemail",
+              "displayName": "workemail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "linkedin",
+              "displayName": "linkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "companyDomain",
+              "displayName": "companyDomain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "companyLinkedin",
+              "displayName": "companyLinkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        544,
+        0
+      ],
+      "id": "fa3310cd-65eb-47e9-a640-0588629b59f8",
+      "name": "Append row in sheet3",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Scrape Leads": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript18",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "If11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript16",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Email from Apollo": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads6": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript12",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript10": {
+      "main": [
+        [
+          {
+            "node": "If5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript11": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript12": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If5": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "If6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If6": {
+      "main": [
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet2": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript14": {
+      "main": [
+        [
+          {
+            "node": "If7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript15": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If7": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript16": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet3": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "If8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If8": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript17",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript17": {
+      "main": [
+        [
+          {
+            "node": "If9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript18": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If9": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Leads7": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If11": {
+      "main": [
+        [
+          {
+            "node": "Scrape Leads7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If12": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript17",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "If12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet4": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}

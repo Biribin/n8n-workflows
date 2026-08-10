@@ -1,0 +1,250 @@
+{
+  "name": "linkedin",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "standard",
+        "resource": "post",
+        "operation": "create",
+        "postAs": "person",
+        "person": "",
+        "text": "",
+        "shareMediaCategory": "IMAGE",
+        "binaryPropertyName": "data",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        32,
+        208
+      ],
+      "id": "6e6950cf-9b32-49b7-a468-c53825477390",
+      "name": "Create a post",
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "linkedInOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "generate",
+        "model": "dall-e-3",
+        "prompt": "",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        208
+      ],
+      "id": "ff7d1be0-aaef-4de3-87f0-5df429a8d08a",
+      "name": "Generate an image",
+      "credentials": {
+        "openAiApi": {
+          "id": "A_RECONNECTER",
+          "name": "openAiApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "title": "n8n-sheet",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        176,
+        208
+      ],
+      "id": "afee5c36-ba46-4ce7-8574-876fcd2a936e",
+      "name": "Create sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "",
+        "text": "",
+        "replyMarkup": "none",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        208
+      ],
+      "id": "765988ff-3754-4d26-abe0-cfafdbd3a903",
+      "name": "Send a text message",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "classify",
+        "input": "",
+        "simplify": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        176,
+        16
+      ],
+      "id": "aa010557-803c-4888-99ce-24140d01585a",
+      "name": "Classify text for violations",
+      "credentials": {
+        "openAiApi": {
+          "id": "A_RECONNECTER",
+          "name": "openAiApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 728848360,
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": false
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        32,
+        16
+      ],
+      "id": "2f92c889-ecbe-495d-8895-a4e4939dc5bd",
+      "name": "Clear sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "id": "8e071325-2323-42b8-ba0c-46720b652ee9",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -176,
+        16
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    }
+  ],
+  "connections": {
+    "Create a post": {
+      "main": [
+        [
+          {
+            "node": "Create sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify text for violations": {
+      "main": [
+        [
+          {
+            "node": "Generate an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate an image": {
+      "main": [
+        [
+          {
+            "node": "Create a post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear sheet": {
+      "main": [
+        [
+          {
+            "node": "Classify text for violations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create sheet1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Clear sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "tags": []
+}

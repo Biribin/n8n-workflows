@@ -1,0 +1,353 @@
+{
+  "name": "Pipeline - Liste dedoublonnage acme (lecture) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dedup-manutention",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        -192
+      ],
+      "id": "049a25e1-5ac6-41c1-a863-c2c91a9dfe96",
+      "name": "Webhook dedup",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -96,
+        -192
+      ],
+      "id": "3ac1f5fb-07c6-4595-867a-9ae702c77e42",
+      "name": "Lire acme manutention",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Entreprise'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        -192
+      ],
+      "id": "78f52516-a005-482f-b727-37a1a1749417",
+      "name": "Construire la liste"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Entreprise'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        32
+      ],
+      "id": "9bbeeb10-7d1a-4657-b6f1-ae50f2fd8678",
+      "name": "Construire la liste1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Company'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        256
+      ],
+      "id": "24bd0df8-45d1-4c2f-87cb-d1d54e4d5789",
+      "name": "Construire la liste2"
+    },
+    {
+      "parameters": {
+        "path": "entreprise_accepte",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        32
+      ],
+      "id": "858ec546-e850-4432-9d2e-15f69bfe3242",
+      "name": "Webhook",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "path": "rejete",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        256
+      ],
+      "id": "a981acb1-99ba-4504-bb13-e2b8757029a3",
+      "name": "Webhook1",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -96,
+        256
+      ],
+      "id": "47a5ea97-0584-417d-abe6-4011b3abf210",
+      "name": "Lire acme rejete",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -96,
+        32
+      ],
+      "id": "c893e2a1-c0c0-4b1b-8edf-c020db53f6b4",
+      "name": "Lire acme aero",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Entreprise'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        480
+      ],
+      "id": "02598ad5-7ecf-4fc5-bc17-7bba8f0342dc",
+      "name": "Construire la liste4"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -96,
+        480
+      ],
+      "id": "0f1eccff-1b29-4e76-93b1-92b12fea2ced",
+      "name": "Lire acme concurrents",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "concurrents",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        480
+      ],
+      "id": "ad3ed760-a0ce-4eb9-b766-bc03f732ab76",
+      "name": "Webhook2",
+      "webhookId": "A_REGENERER"
+    }
+  ],
+  "connections": {
+    "Webhook dedup": {
+      "main": [
+        [
+          {
+            "node": "Lire acme manutention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire acme manutention": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire la liste": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Lire acme aero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Lire acme rejete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire acme rejete": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire acme aero": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire acme concurrents": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook2": {
+      "main": [
+        [
+          {
+            "node": "Lire acme concurrents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

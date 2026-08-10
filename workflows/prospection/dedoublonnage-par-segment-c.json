@@ -1,0 +1,100 @@
+{
+  "name": "Pipeline - Liste dedoublonnage transport-logistique (lecture) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dedup-transport",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        -256
+      ],
+      "id": "a93db5a0-a476-4683-9380-1b2da45cee42",
+      "name": "Webhook dedup",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        -256
+      ],
+      "id": "04ebd398-80d6-4353-bb0a-1525e19dcfee",
+      "name": "Lire Air transport",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Entreprise'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -256
+      ],
+      "id": "6ecd6acf-0f37-48ff-b161-4e4b3aa4a694",
+      "name": "Construire la liste"
+    }
+  ],
+  "connections": {
+    "Webhook dedup": {
+      "main": [
+        [
+          {
+            "node": "Lire Air transport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire Air transport": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

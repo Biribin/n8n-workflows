@@ -1,0 +1,1607 @@
+{
+  "name": "radar commercial",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "daysInterval": 3,
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2320,
+        -64
+      ],
+      "id": "1a855ca4-190d-4bbe-a2f3-0f31158026a9",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Feuilles SOURCE = celles dont le nom commence par un code NAF (ex. \"78.20Z ...\").\n// Detectees dynamiquement : une nouvelle feuille NAF est prise en compte sans toucher au code.\n// Exclut de fait : Annuaire (destination), Notes_Claire, Methode.\nconst MOTIF = /^\\d{2}\\.\\d{2}/;\n\nconst brut = $('Lister feuilles').first().json;\nconst src  = brut.body ?? brut;                 // fullResponse -> { body, headers, statusCode }\nconst feuilles = Array.isArray(src.value) ? src.value : [];\n\nif (!feuilles.length) {\n  throw new Error('Liste des feuilles vide. Reponse brute de \"Lister feuilles\" : ' + JSON.stringify(brut).slice(0, 900));\n}\n\nconst sources = feuilles\n  .filter(w => w && w.name && w.id && MOTIF.test(String(w.name).trim()))\n  .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))\n  .map(w => ({ json: { sheetName: String(w.name).trim(), sheetId: w.id } }));\n\nif (!sources.length) {\n  throw new Error('Aucune feuille source detectee (le nom doit commencer par un code NAF). Feuilles du classeur : ' + feuilles.map(w => w.name).join(' | '));\n}\n\nreturn sources;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        32
+      ],
+      "id": "844e8dfa-318b-4149-82b3-31f48dc39443",
+      "name": "Feuilles sources"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -976,
+        32
+      ],
+      "id": "7b5b1158-cc18-4aa8-af2d-927bcb6672a1",
+      "name": "Boucle feuilles"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ ['active','a'].includes(String($json.Statut ?? '').trim().toLowerCase()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f2",
+              "leftValue": "={{ String($json.apollo_statut ?? '').trim() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -752,
+        -160
+      ],
+      "id": "6ebac3d4-e833-4c36-9d9a-2b3f3ef6ee38",
+      "name": "Filtre societes a traiter"
+    },
+    {
+      "parameters": {},
+      "id": "764fc341-aefa-42a9-bc9d-d9fcc6e5adc8",
+      "name": "Declenchement manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2320,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reglages centraux du radar commercial Apollo.\n// !! Cle API Apollo en clair : a deplacer dans une credential n8n \"Header Auth\" (x-api-key), puis rotater.\nconst WORKBOOK_ID = '22002ED2757F43B18C70ACEB7FAB3A78';\n\nreturn [{\n  json: {\n    APOLLO_API_KEY: 'REMPLACER',\n    PAYS: ['France'],\n\n    WORKBOOK_ID,\n    GRAPH: 'https://graph.microsoft.com/v1.0/me/drive/items/' + WORKBOOK_ID + '/workbook',\n    FEUILLE_ANNUAIRE: 'Annuaire',\n\n    // ===== QUALIFICATION IA =====\n    // /!\\ 2026-08-06 : compte1 ET compte2 sont a court de quota hebdomadaire (429).\n    //     Remettre a true des qu'un compte est de nouveau disponible, ou apres avoir\n    //     depose une cle API dans /opt/n8n/secrets/claude/api-key (rang 2 du wrapper).\n    // QUALIFICATION_IA : appelle le CLI Claude Code (~17 s, ~0,05 $ de quota par societe).\n    //                    Si false, la colonne Secteur reste VIDE.\n    // IA_SCORING       : false -> secteur metier + site web uniquement.\n    //                    true  -> ajoute le score /10 et CORE/EDGE/OUT dans apollo_statut.\n    QUALIFICATION_IA: true,\n    IA_SCORING: false,\n    MODELE_IA: 'sonnet',\n    TIMEOUT_IA_MS: 270000,\n    SEUIL_CORE: 7,\n    MOTIF_IA: true,\n\n\n    // ===== SELECTION DES CONTACTS =====\n    // Priorite absolue a l'email : d'abord tous les contacts joignables, LinkedIn ensuite.\n    STATUTS_EMAIL_ACCEPTES: ['verified', 'likely to engage', 'extrapolated'],\n    INCLURE_SANS_EMAIL: true,\n    SEUIL_COMPLEMENT_LINKEDIN: 10,\n    SENIORITES: ['owner','founder','c_suite','partner','vp','head','director','manager','senior','entry'],\n\n    // ===== PLAFONDS =====\n    // 1 societe par run : mode TEST. Monter seulement apres validation.\n    MAX_SOCIETES_PAR_RUN:10,\n    // 30 contacts par entreprise, 2 par fonction en priorite ; si une fonction est vide,\n    // on bouche avec les autres pour atteindre 10 quand meme.\n    MAX_PROSPECTS_PAR_SOCIETE: 10,\n    MAX_PAR_FONCTION: 2,\n\n    SEUIL_MATCH_SOCIETE: 0.6,\n  },\n}];"
+      },
+      "id": "ac80c6de-3b80-49c8-932e-cd4322cdd269",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2096,
+        32
+      ],
+      "notes": "Reglages centraux : cle Apollo, quotas, seuils."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transforme la reponse Graph \"usedRange\" en lignes exploitables, en conservant le\n// NUMERO DE LIGNE reel dans la feuille : c'est lui qui permet d'ecrire apollo_statut\n// dans la bonne cellule, sans dependre d'une recherche cote n8n.\nconst b   = $('Boucle feuilles').all()[0]?.json || {};\nconst rep = $input.first()?.json || {};\nconst src = rep.body ?? rep;\n\nconst values  = Array.isArray(src.values) ? src.values : [];\nconst address = String(src.address || '');      // ex : \"'78.20Z Intérim'!A1:L7\"\nif (values.length < 2) return [];               // en-tetes seuls, ou feuille vide\n\n// Colonne + ligne de depart de la zone utilisee\nconst m = address.match(/!\\$?([A-Z]+)\\$?(\\d+)/i);\nconst colDepart   = m ? m[1].toUpperCase() : 'A';\nconst ligneDepart = m ? parseInt(m[2], 10) : 1;\n\nconst colVersNum = s => [...s].reduce((a, c) => a * 26 + (c.charCodeAt(0) - 64), 0);\nconst numVersCol = n => { let s = ''; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; };\n\nconst entetes   = (values[0] || []).map(h => String(h ?? '').trim());\nconst iApollo   = entetes.indexOf('apollo_statut');\nconst colApollo = iApollo >= 0 ? numVersCol(colVersNum(colDepart) + iApollo) : '';\n\nconst out = [];\nvalues.slice(1).forEach((ligne, idx) => {\n  const o = {};\n  let vide = true;\n  entetes.forEach((h, k) => {\n    if (!h) return;\n    const v = ligne[k];\n    o[h] = (v === null || v === undefined) ? '' : String(v).trim();\n    if (o[h] !== '') vide = false;\n  });\n  if (vide) return;                             // ligne totalement vide -> ignoree\n  o._sheet     = b.sheetName || '';\n  o._sheetId   = b.sheetId || '';\n  o._rowNumber = ligneDepart + 1 + idx;         // +1 : 1re ligne de la zone = les en-tetes\n  o._colApollo = colApollo;\n  out.push({ json: o });\n});\n\nreturn out;"
+      },
+      "id": "e4528c5c-8091-4058-93c5-6e7b7640a0ed",
+      "name": "Tag feuille",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalise les lignes societe, deduplique, ordonne par rendement, et plafonne le nombre par run.\n//\n// ATTENTION : les feuilles n'ont PAS toutes le meme schema.\n//   78.20Z Interim -> Classe | Nom / enseigne | Raison sociale (SIRENE) | SIREN | NAF | ...\n//   les 8 autres   -> Code NAF | Nom | SIREN | Commune | ... | Tranche effectif | ...\n// Chaque information est donc lue par ordre de preference sur plusieurs noms de colonne.\nconst cfg = $('Config').first().json;\nconst MAX = cfg.MAX_SOCIETES_PAR_RUN || 15;\nconst t = s => String(s ?? '').trim();\n// premiere valeur non vide parmi plusieurs colonnes possibles ('-' = valeur absente cote source)\nconst prem = (r, ...cles) => {\n  for (const c of cles) { const v = t(r[c]); if (v && v !== '-') return v; }\n  return '';\n};\n\n// --- Nom envoye a Apollo ---\n// Apollo indexe des noms COMMERCIAUX, les feuilles portent la raison sociale du registre.\n// Mesures du 07/08 :\n//   \"SOCIETE AIR FRANCE\"                             -> 0 resultat ; \"Air France\" -> 52.\n//   \"AIR CARAIBES (AIR CARAIBES CHARTER AIR GUAD...)\" -> 0 ; SIRENE accole les enseignes du groupe.\n//   \"AMERICAN AIRLINES INC\", \"BRITISH AIRWAYS PLC\"    -> 0 ; formes juridiques anglo-saxonnes.\n//   \"TURK HAVA YOLLARI AO - TURKISH AIR LINES\"        -> 0 ; double denomination separee par un tiret.\n// On coupe donc a la parenthese, au slash et au tiret entoure d'espaces, puis on retire la forme\n// juridique en TETE et en QUEUE. On ne touche JAMAIS a un mot pouvant appartenir a la marque :\n// FRANCE, GROUPE, COMPAGNIE, AIR, AIRWAYS, AIRLINES restent.\nconst FORMES = ['SOCIETE', 'STE', 'SA', 'SAS', 'SASU', 'SARL', 'EURL', 'SNC', 'SCS', 'SCA',\n                'SASP', 'GIE', 'EARL', 'SCOP', 'SELARL', 'SCM',\n                'INC', 'LTD', 'LIMITED', 'PLC', 'LLC', 'CORP', 'CORPORATION',\n                'GMBH', 'AG', 'BV', 'NV', 'SPA', 'SRL', 'AB', 'AS', 'OY', 'PTE'];\nfunction nomRecherche(s) {\n  let base = String(s || '');\n  const par = base.indexOf('(');\n  if (par > 0) base = base.slice(0, par);          // enumeration d'enseignes : on garde la 1re\n  base = base.split('/')[0];                       // \"X / Y\"\n  base = base.split(/\\s+-\\s+/)[0];                 // \"X - Y\" (double denomination)\n  const m = base.replace(/[.,]/g, ' ').replace(/\\s+/g, ' ').trim().split(' ');\n  let bouge = true;\n  while (bouge && m.length > 1) {\n    bouge = false;\n    const tete = m[0].toUpperCase().replace(/[^A-Z]/g, '');\n    if (FORMES.includes(tete)) { m.shift(); bouge = true; continue; }\n    const queue = m[m.length - 1].toUpperCase().replace(/[^A-Z]/g, '');\n    if (FORMES.includes(queue)) { m.pop(); bouge = true; }\n  }\n  return m.join(' ').trim();\n}\n\nconst vus = new Set();\nconst out = [];\nconst ignorees = [];\n\nfor (const it of $input.all()) {\n  const r = it.json || {};\n\n  const raison   = prem(r, 'Raison sociale (SIRENE)', 'Raison sociale', 'Nom');\n  const enseigne = prem(r, 'Nom / enseigne', 'Enseigne', 'Nom');\n  const nom = raison || enseigne;\n\n  const sheet     = t(r._sheet);\n  const sheetId   = t(r._sheetId);\n  const colApollo = t(r._colApollo);\n  const rowNumber = Number(r._rowNumber || 0);\n\n  // Ligne sans nom exploitable : on ne peut pas interroger Apollo. On la recense\n  // au lieu de la laisser disparaitre en silence.\n  if (!nom) { ignorees.push(sheet + ' L' + rowNumber); continue; }\n\n  const siren = prem(r, 'SIREN');\n  const cle = siren || (sheet + '|' + nom.toUpperCase());\n  if (vus.has(cle)) continue;\n  vus.add(cle);\n\n  // Reperage exact de la cellule apollo_statut a mettre a jour en fin de traitement.\n  // Pas de repli silencieux : sans reperage complet la societe ne serait jamais marquee\n  // et repasserait a chaque run.\n  if (!sheetId || !colApollo || !rowNumber) {\n    throw new Error('Reperage incomplet pour \"' + nom + '\" (feuille \"' + sheet + '\") : '\n      + 'sheetId=' + (sheetId || 'vide')\n      + ' colonne=' + (colApollo || 'vide — la colonne apollo_statut existe-t-elle dans cette feuille ?')\n      + ' ligne=' + rowNumber);\n  }\n\n  // On cherche sur l'enseigne nettoyee en priorite : c'est le nom sous lequel Apollo connait\n  // l'entreprise. La raison sociale ne sert que de repli.\n  const cherche = nomRecherche(enseigne) || nomRecherche(raison) || nom;\n\n  // Nom AFFICHE dans l'Annuaire : lui aussi debarrasse de l'enumeration entre parentheses,\n  // sinon la RH lit \"AIR CARAIBES (AIR CARAIBES CHARTER AIR GUADELOUPE ...)\" dans sa colonne.\n  const affiche = (enseigne || raison).split('(')[0].trim() || (enseigne || raison);\n\n  out.push({ json: {\n    _nom_recherche: cherche,\n    _nom_brut: nom,\n    _nom_affiche: affiche,\n    _raison: raison,\n    _enseigne: enseigne,\n    _siren: siren,\n    _naf: prem(r, 'NAF', 'Code NAF'),\n    _classe: prem(r, 'Classe') || sheet,\n    _commune: prem(r, 'Commune'),\n    _taille: prem(r, 'Taille'),\n    _effectif: prem(r, 'Tranche effectif'),\n    _sheet: sheet,\n    _sheetId: sheetId,\n    _colApollo: colApollo,\n    _rowNumber: rowNumber,\n  }});\n}\n\nif (!out.length && ignorees.length) {\n  throw new Error('Aucune societe exploitable : ' + ignorees.length\n    + ' ligne(s) sans nom reconnaissable. Exemples : ' + ignorees.slice(0, 5).join(', ')\n    + '. Verifie les en-tetes de ces feuilles.');\n}\n\n// --- ORDRE DE PASSAGE : rendement Apollo decroissant ---\n// Mesure du 07/08 : interroger une societe coute 1 credit, QU'ELLE SOIT TROUVEE OU NON.\n// Tri STABLE : a l'interieur d'une feuille, l'ordre des lignes du classeur est conserve.\nconst ORDRE = cfg.ORDRE_FEUILLES || [\n  '51.10Z', '52.29A-B', '51.21Z', '56.29A-B', '52.23Z',\n  '80.10Z', '81.21-22Z', '85.59A', '78.20Z',\n];\nconst rang = s => {\n  const i = ORDRE.findIndex(p => String(s || '').indexOf(p) === 0);\n  return i < 0 ? ORDRE.length : i;\n};\nout.sort((a, b) => rang(a.json._sheet) - rang(b.json._sheet));\n\nconst res = out.slice(0, MAX);\nres.forEach(i => {\n  i.json._candidates_total = out.length;\n  i.json._ignorees = ignorees.length;\n  i.json._ignorees_exemples = ignorees.slice(0, 5);\n});\nreturn res;"
+      },
+      "id": "0d7a12c3-aa68-4fcf-a8c6-c0287eb0a24b",
+      "name": "Preparer societes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "baba7fb8-ec34-4aa1-b7ba-7a98d7b991e1",
+      "name": "Boucle societes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -304,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_companies/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Config').first().json.APOLLO_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ q_organization_name: $json._nom_recherche, page: 1, per_page: 25 }) }}",
+        "options": {}
+      },
+      "id": "7334d3a1-2df9-47e0-8d97-a76aa0bb2a56",
+      "name": "Apollo - Societe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -80,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "Resout la societe -> organization_id + domaine. Appel gratuit (pas de credit)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Choisit la meilleure correspondance Apollo pour la societe courante, avec seuil de similarite.\nconst cfg   = $('Config').first().json;\nconst src   = $('Boucle societes').all()[0].json;\nconst seuil = cfg.SEUIL_MATCH_SOCIETE ?? 0.6;\n\nconst rep  = $input.first()?.json || {};\nconst rsp  = rep.body ?? rep;\nconst orgs = rsp.organizations || rsp.accounts || [];\n\nconst norm0 = s => String(s || '').toUpperCase().normalize('NFD')\n  .replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');\n\n// --- 1er ou 2e essai ? ---\n// Apollo rejoue la requete dans \"breadcrumbs\" : on y lit le nom REELLEMENT interroge et on le\n// compare a celui de la societe. S'ils different, le rattrapage IA a fourni un nom -> 2e essai.\n// !! Ne PAS se fier a $('Parser nom').all() : dans la boucle ce noeud renvoie son DERNIER run,\n// pas celui de la societe courante (vecu le 07/08 : la 1re societe declenchait le rattrapage et\n// les 9 suivantes heritaient de essai=2, donc plus aucun rattrapage possible).\nconst bc = (rsp.breadcrumbs || []).find(b => b && b.signal_field_name === 'q_organization_name');\nconst nomInterroge = bc ? String(bc.value || '') : '';\nconst estRattrapage = !!nomInterroge && norm0(nomInterroge) !== norm0(src._nom_recherche);\nconst essai = estRattrapage ? 2 : 1;\nconst nomIA = estRattrapage ? nomInterroge : '';\n\nconst FORMES = /\\b(SAS|SASU|SARL|EURL|SA|SNC|SCI|SCOP|GIE|GROUPE|GROUP|HOLDING|INTERNATIONAL|COMPANY|LIMITED|LTD|LLC|INC|PLC|CORP|GMBH|BV|NV|AG|CO)\\b/g;\nconst norm = s => String(s || '')\n  .toUpperCase()\n  .normalize('NFD').replace(/[̀-ͯ]/g, '')\n  .replace(/[^A-Z0-9 ]/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\nconst tokens = s => norm(s).replace(FORMES, ' ').split(/\\s+/).filter(x => x.length > 1);\n\nfunction similarite(a, b) {\n  const A = new Set(tokens(a)), B = new Set(tokens(b));\n  if (!A.size || !B.size) return 0;\n  const inter = [...A].filter(x => B.has(x)).length;\n  const jaccard = inter / new Set([...A, ...B]).size;\n  const ca = [...A].join(''), cb = [...B].join('');\n  const contenu = (ca && cb && (ca.includes(cb) || cb.includes(ca))) ? 0.85 : 0;\n  return Math.max(jaccard, contenu);\n}\n\n// --- Indice SECTEUR : NAF de la feuille vs NAICS/SIC de la fiche Apollo ---\n// C'est le signal le plus discriminant dont on dispose. Apollo heberge au moins trois societes\n// nommees exactement \"Corsair\" ; aucune ne porte de marqueur francais, donc le choix etait\n// arbitraire. Le code d'activite les separe sans ambiguite : la compagnie aerienne est en NAICS\n// 4811 / SIC 4512, Corsair Gaming en electronique (334xxx / 3571).\n// Correspondances calees sur les 9 feuilles du classeur. Une feuille inconnue -> aucun effet.\nconst NAF_NAICS = {\n  '51.10': ['4811', '4812'],                    // transport aerien de passagers\n  '51.21': ['4811', '4812', '4885'],            // fret aerien\n  '52.23': ['4881', '4885', '4879'],            // services auxiliaires / assistance aeroportuaire\n  '52.29': ['4885', '4884', '4931', '4889'],    // organisation du transport de fret\n  '56.29': ['7223', '7225', '3118'],            // restauration collective / catering\n  '78.20': ['5613'],                            // travail temporaire\n  '80.10': ['5616'],                            // activites de securite privee\n  '81.21': ['5617'], '81.22': ['5617'],         // nettoyage\n  '85.59': ['6114', '6115', '6116', '6113'],    // formation\n  '33.16': ['4881', '3364'],                    // maintenance aeronautique\n};\nconst NAF_SIC = {\n  '51.10': ['4512', '4513'], '51.21': ['4512', '4513', '4731'],\n  '52.23': ['4581'], '52.29': ['4731'], '56.29': ['5812'],\n  '78.20': ['7363'], '80.10': ['7381', '7382'], '81.21': ['7349'], '81.22': ['7349'],\n  '85.59': ['8249', '8299'], '33.16': ['3728', '4581'],\n};\nfunction attendus(table) {\n  const c = String(src._naf || '').toUpperCase().replace(/[^0-9]/g, '');   // \"5110Z\" -> \"5110\"\n  if (c.length < 4) return null;\n  return table[c.slice(0, 2) + '.' + c.slice(2, 4)] || null;\n}\nconst NAICS_OK = attendus(NAF_NAICS);\nconst SIC_OK   = attendus(NAF_SIC);\n\nfunction indiceSecteur(o) {\n  const colle = (codes, prefs) => !!prefs && (codes || []).some(\n    c => prefs.some(p => String(c).indexOf(p) === 0));\n  let n = 0;\n  if (colle(o.naics_codes, NAICS_OK)) n += 2;\n  if (colle(o.sic_codes, SIC_OK)) n += 1;\n  return n;\n}\n\n// --- Indice \"entite francaise\", simple appoint ---\n// Deux erreurs deja commises ici, a ne pas refaire :\n//   1) compter la langue -> un multinational liste le francais parce que son site est traduit.\n//      Corsair Gaming decrochait ainsi un point et battait les vrais candidats.\n//   2) reduire le bassin aux candidats francais des qu'il en existe un -> \"CORSAIR\" partait sur\n//      \"CORSAIR SYSTEM\" (societe francaise sans rapport, similarite 0,85) au lieu des \"Corsair\"\n//      a 1,00. Une preference ne doit JAMAIS faire perdre en similarite.\nfunction indiceFrance(o) {\n  const dom = String(o.primary_domain || o.website_url || '').toLowerCase();\n  const tel = String(o.sanitized_phone || o.phone || '').replace(/\\D/g, '');\n  let n = 0;\n  if (/\\.fr(\\b|\\/|$)/.test(dom)) n += 2;\n  if (tel.indexOf('33') === 0) n += 2;\n  return n;\n}\n\nconst notes = orgs.map(o => ({\n  o,\n  s: Math.max(\n    similarite(src._raison, o.name),\n    similarite(src._enseigne, o.name),\n    nomIA ? similarite(nomIA, o.name) : 0\n  ),\n  a: indiceSecteur(o),\n  f: indiceFrance(o),\n}));\n\n// Ordre de decision : similarite de nom, puis SECTEUR, puis France.\n// La similarite prime toujours ; secteur et pays ne departagent que des ex aequo stricts.\nconst sMax = notes.reduce((m, x) => Math.max(m, x.s), 0);\nconst tete = notes.filter(x => x.s >= sMax - 0.0001);\n\nlet best = null, ia = -1, iF = -1;\nfor (const x of tete) {\n  if (x.a > ia || (x.a === ia && x.f > iF)) { ia = x.a; iF = x.f; best = x.o; }\n}\n\nconst meilleur = sMax;\nconst ok = !!best && meilleur >= seuil;\n\nreturn [{ json: {\n  ...src,\n  _essai: essai,\n  _nom_ia: nomIA,\n  _nom_interroge: nomInterroge,\n  _nom_recherche: nomIA || src._nom_recherche,\n  _match: ok,\n  _match_score: Math.round(meilleur * 100) / 100,\n  _indice_secteur: ia < 0 ? 0 : ia,\n  _indice_france: iF < 0 ? 0 : iF,\n  _ex_aequo: tete.length,\n  _naics_attendus: NAICS_OK,\n  // id bidon si pas de match : la recherche de personnes renverra 0 resultat (appel gratuit)\n  _org_id: ok ? best.id : '000000000000000000000000',\n  _org_nom: ok ? best.name : '',\n  _domaine: ok ? (best.primary_domain || '') : '',\n  _apollo_statut: ok ? 'TRUE' : 'NO_MATCH',\n  _candidats: orgs.map(o => o.name + '[s' + indiceSecteur(o) + 'f' + indiceFrance(o) + ']').slice(0, 5).join(' | ')\n}}];"
+      },
+      "id": "26379f4a-246f-42d0-92aa-4fdaa4aba5a5",
+      "name": "Choisir societe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -304
+      ],
+      "notes": "Garde-fou anti faux positif : Apollo renvoie souvent une societe au nom proche mais differente."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_people/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Config').first().json.APOLLO_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page: 1, per_page: 100, organization_ids: [$json._org_id], person_seniorities: $('Config').first().json.SENIORITES }) }}",
+        "options": {}
+      },
+      "id": "f7aaba1c-eb9e-4dd9-a2d2-6f0b8e219afa",
+      "name": "Apollo - Personnes brut",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2384,
+        -304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "Recherche large (1 appel/societe, gratuit). linkedin_url et email_status sont renvoyes ici ; l'email reste masque."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "tc1",
+              "leftValue": "={{ ($json.pagination || {}).total_entries || 0 }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e302b76c-3716-47a9-9356-cb89f15af83f",
+      "name": "Trop de contacts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2608,
+        -304
+      ],
+      "notes": "> 100 contacts : la recherche large est tronquee, on repasse en requetes ciblees par fonction."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Grosse societe (>100 contacts) : la recherche large est tronquee, on rejoue les filtres\n// Apollo natifs. Les 10 fonctions demandees sont fusionnees en 6 requetes : celles qui\n// partagent le meme couple (departement, niveau hierarchique).\n// person_titles = OR + correspondance partielle ; croise en AND avec departement et seniorite.\n//\n// CHAQUE bloc est joue DEUX FOIS, et c'est deliberе :\n//   passe 1 (person_locations = France) -> les decideurs francais, cherches dans la TOTALITE du\n//     vivier. Indispensable : British Airways compte 20 213 contacts chez Apollo, soit 203 pages,\n//     et la recherche large n'en voit que la premiere, un echantillon arbitraire sans Francais.\n//   passe 2 (sans filtre pays) -> rattrape les profils dont le pays n'est PAS renseigne, qu'un\n//     filtre serveur exclurait silencieusement. \"Filtre localisation ciblees\" ne gardera d'eux\n//     que ceux sans pays : un contact affiche en Angleterre reste ecarte.\n// Les recherches de personnes sont GRATUITES (0 credit), seul le temps double.\nconst org  = $('Choisir societe').first().json._org_id;\nconst PAYS = $('Config').first().json.PAYS || ['France'];\n\nconst BLOCS = [\n  // DRH / RRH\n  { titres: ['DRH','RRH','RH','HR','Talent','People','Ressources Humaines','Human Resources','HRBP','CHRO','Capital Humain'],\n    depts: ['master_human_resources'], sen: ['manager','director','vp','head','c_suite'] },\n  // Recrutement + Formation (memes departement et niveaux, 'entry' inclus pour les Charge(e) de...)\n  { titres: ['Recrutement','Recruiting','Recruiter','Recruteur','Talent Acquisition','Hiring','Integration','Formation','Training','Learning','L&D','Competences'],\n    depts: ['master_human_resources'], sen: ['manager','director','head','senior','entry'] },\n  // Direction generale / de site -- aucun departement Apollo ne correspond\n  { titres: ['Directeur General','General Manager','Managing Director','CEO','Country Manager','Branch Manager','Regional Director','Site Manager','Gerant','President','Directeur de site','Directeur regional','Directeur de filiale',\"Chef d'etablissement\"],\n    depts: null, sen: ['owner','founder','c_suite','partner','vp'] },\n  // Achats + Operations / Exploitation\n  { titres: ['Achats','Acheteur','Procurement','Sourcing','Purchasing','Fournisseurs','Exploitation','Operations','Escale','Handling','Station Manager','Ground Operations','Chef de base'],\n    depts: ['master_operations'], sen: ['manager','director','vp','head','c_suite'] },\n  // Planning + Surete + Qualite/QHSE\n  { titres: ['Planning','Planification','Scheduling','Workforce','Roster','Ordonnancement','Surete','Securite','Security','Safety','Qualite','Quality','QHSE','QSE','HSE','EHS'],\n    depts: ['master_operations'], sen: ['manager','director','head','senior','entry'] },\n  // DAF / Controle de gestion\n  { titres: ['Financier','Finance','Controller','Controle de gestion','DAF','RAF','CFO','Comptable'],\n    depts: ['master_finance'], sen: ['manager','director','vp','c_suite'] },\n];\n\nconst sorties = [];\nfor (const b of BLOCS) {\n  for (const avecPays of [true, false]) {\n    const q = {\n      page: 1, per_page: 100,\n      organization_ids: [org],\n      person_titles: b.titres,\n      person_seniorities: b.sen,\n    };\n    if (avecPays) q.person_locations = PAYS;\n    if (b.depts) q.person_department_or_subdepartments = b.depts;\n    sorties.push({ json: { _query: q, _avec_pays: avecPays } });\n  }\n}\nreturn sorties;"
+      },
+      "id": "7b0f1a96-0dc5-465e-9c1f-d39d299ebeee",
+      "name": "Requetes ciblees",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2832,
+        -304
+      ],
+      "notes": "Les 10 fonctions demandees, fusionnees en 6 requetes (memes couples departement + niveau hierarchique)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_people/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Config').first().json.APOLLO_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json._query) }}",
+        "options": {}
+      },
+      "id": "25dda222-d602-4ddb-bca2-2dac033979a5",
+      "name": "Apollo - Personnes ciblees",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3056,
+        -304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classe les personnes trouvees dans les 10 fonctions cibles, deduplique, selectionne, et\n// prepare les lots pour /people/bulk_match.\n//\n// REGLE DE COUT : seuls les contacts dont Apollo annonce un email exploitable partent a\n// l'enrichissement (1 credit = 1 email revele). Un contact 'unavailable' n'a PAS d'email\n// chez Apollo : l'enrichir ne renverrait rien et couterait quand meme.\nconst cfg = $('Config').first().json;\nconst soc = $('Choisir societe').first().json;\nconst MAX = cfg.MAX_PROSPECTS_PAR_SOCIETE || 10;\nconst MAX_PAR_FONCTION = cfg.MAX_PAR_FONCTION || 2;\nconst OK_EMAIL = cfg.STATUTS_EMAIL_ACCEPTES || ['verified','likely to engage','extrapolated'];\nconst INCLURE_SANS_EMAIL = cfg.INCLURE_SANS_EMAIL !== false;\nconst SEUIL_COMPLEMENT = cfg.SEUIL_COMPLEMENT_LINKEDIN ?? MAX;\n\n// Les 10 FONCTIONS cibles. Chaque bloc regroupe tous les synonymes d'UN MEME poste.\n//   niveau 1 = qui SIGNE | niveau 2 = qui DECLENCHE le besoin | niveau 3 = qui PILOTE\n// Regles ecrites SANS accent : les titres sont normalises avant test.\nconst BLOCS = [\n  { cle:'RH', niveau:1, poids:100,\n    titres:[/\\bdrh\\b/,/\\brrh\\b/,/\\brh\\b/,/ressources? humaines?/,/\\bhr\\b/,/human resources/,/\\bpeople\\b/,/talent management/,/\\bchro\\b/,/\\bhrbp\\b/,/business partner/,/capital humain/],\n    depts:['master_human_resources'], sen:['manager','director','vp','head','c_suite','owner','founder','partner','senior','entry'] },\n  { cle:'RECRUTEMENT', niveau:1, poids:95,\n    titres:[/recrut/,/recruit/,/talent acquisition/,/staffing/,/hiring/,/integration/],\n    titresSiDept:{ regex:[/sourcing/], depts:['master_human_resources'] },\n    exclure:[/achat/,/procurement/,/purchasing/,/supplier/,/fournisseur/,/\\bit\\b/,/software/,/technique/,/systeme/,/\\bdata\\b/,/\\bapi\\b/,/developp/],\n    depts:['master_human_resources'], sen:['manager','director','head','senior','vp','c_suite','entry'] },\n  { cle:'DIRECTION', niveau:1, poids:92,\n    titres:[/directeur general/,/directrice general/,/\\bdg\\b/,/\\bpdg\\b/,/gerant/,/president/,/\\bceo\\b/,/managing director/,/general manager/,/country manager/,/branch manager/,/agency (manager|director)/,/regional director/,/site (director|manager)/,/direct(eur|rice) (de site|d.agence|de filiale|regional)/,/chef d.etablissement/,/\\bfounder\\b/,/\\bowner\\b/,/co-?fondateur/],\n    depts:null, sen:['owner','founder','c_suite','partner','vp','head','director','manager'] },\n  { cle:'ACHATS', niveau:1, poids:85,\n    titres:[/achat/,/acheteu/,/procurement/,/purchasing/,/sourcing/,/category manager/,/fournisseur/,/vendor manager/,/\\bcpo\\b/],\n    depts:['master_operations'], sen:['manager','director','vp','head','c_suite','senior'] },\n  { cle:'OPERATIONS', niveau:2, poids:78,\n    titres:[/exploitation/,/operations?/,/\\bops\\b/,/escale/,/handling/,/station manager/,/ground operations/,/chef de base/,/\\bcoo\\b/,/\\bpiste\\b/],\n    depts:['master_operations'], sen:['manager','director','vp','head','c_suite'] },\n  { cle:'PLANNING', niveau:2, poids:72,\n    titres:[/plan+ing/,/planification/,/scheduling/,/workforce/,/roster/,/ordonnancement/],\n    depts:['master_operations'], sen:['manager','director','head','senior','entry'] },\n  { cle:'SURETE', niveau:2, poids:66,\n    titres:[/surete/,/securite/,/\\bsecurity\\b/,/\\bsafety\\b/],\n    exclure:[/qualite/,/qhse/,/\\bqse\\b/,/environnement/],\n    depts:['master_operations'], sen:['manager','director','head'] },\n  { cle:'FORMATION', niveau:3, poids:56,\n    titres:[/formation/,/training/,/learning/,/l&d/,/competences/],\n    depts:['master_human_resources'], sen:['manager','director','head','senior','entry'] },\n  { cle:'FINANCE', niveau:3, poids:52,\n    titres:[/financier/,/financiere/,/\\bfinance\\b/,/controller/,/control(e|eur) de gestion/,/\\bdaf\\b/,/\\braf\\b/,/\\bcfo\\b/,/comptab/,/administratif et financier/],\n    depts:['master_finance'], sen:['manager','director','vp','head','c_suite'] },\n  { cle:'QUALITE', niveau:3, poids:48,\n    titres:[/qualite/,/quality/,/\\bqhse\\b/,/\\bqse\\b/,/\\bhse\\b/,/\\behs\\b/],\n    depts:['master_operations'], sen:['manager','director','head','senior','entry'] },\n];\n\nconst BONUS_SEN = { c_suite:12, owner:12, founder:12, partner:8, vp:8, head:7, director:6, manager:3, senior:1, entry:0 };\nconst norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\n\n// --- Collecte : recherche large + recherches ciblees, dedupliquees par id ---\nlet larges = [];\ntry { larges = $('Apollo - Personnes').all(); } catch (e) { larges = []; }\nconst parId = new Map();\nfor (const r of [...$input.all(), ...larges]) {\n  for (const p of (r.json?.people || [])) {\n    if (p && p.id && !parId.has(p.id)) parId.set(p.id, p);\n  }\n}\n\n// --- Deja dans l'Annuaire (id Apollo ou email) : pas de doublon entre runs ---\nconst deja = new Set();\ntry {\n  const rep = $('Lire Annuaire').first().json;\n  const src = rep.body ?? rep;\n  const vals = Array.isArray(src.values) ? src.values : [];\n  const hdr  = (vals[0] || []).map(h => String(h ?? '').trim());\n  const iId   = hdr.indexOf('ID_Prospect');\n  const iMail = hdr.indexOf('Email');\n  for (const row of vals.slice(1)) {\n    if (iId   >= 0 && row[iId])   deja.add(String(row[iId]).trim());\n    if (iMail >= 0 && row[iMail]) deja.add(String(row[iMail]).trim().toLowerCase());\n  }\n} catch (e) { /* annuaire vide ou illisible */ }\n\nconst retenus = [];\nfor (const p of parId.values()) {\n  if (deja.has(String(p.id))) continue;\n  const titre = norm(p.title);\n  if (!titre) continue;\n  const sen = p.seniority || '';\n  const depts = [...(p.departments || []), ...(p.subdepartments || []), ...(p.functions || [])];\n\n  let bloc = null;\n  for (const b of BLOCS) {\n    let touche = b.titres.some(rx => rx.test(titre));\n    if (!touche && b.titresSiDept) {\n      touche = b.titresSiDept.regex.some(rx => rx.test(titre))\n            && b.titresSiDept.depts.some(d => depts.includes(d));\n    }\n    if (!touche) continue;\n    if (b.exclure && b.exclure.some(rx => rx.test(titre))) continue;\n    if (!b.sen.includes(sen)) continue;\n    bloc = b;\n    break;\n  }\n  if (!bloc) continue;\n\n  const deptOk = bloc.depts ? bloc.depts.some(d => depts.includes(d)) : true;\n  const statutMail = p.email_status || 'unavailable';\n  const emailable = OK_EMAIL.includes(statutMail) ? 1 : 0;\n\n  retenus.push({\n    id: p.id,\n    name: p.name || [p.first_name, p.last_name].filter(Boolean).join(' '),\n    title: p.title || '',\n    seniority: sen,\n    linkedin: p.linkedin_url || '',\n    email_status: statutMail,\n    emailable,\n    bloc: bloc.cle,\n    niveau: bloc.niveau,\n    score: bloc.poids + (BONUS_SEN[sen] || 0) + (deptOk ? 8 : 0),\n  });\n}\n\nretenus.sort((a, b) =>\n  (b.emailable - a.emailable) || (b.score - a.score) || (a.niveau - b.niveau));\n\n// --- SELECTION ---\n// Un contact sans email ET sans LinkedIn n'est d'aucune utilite : ecarte.\nconst eligibles = retenus.filter(p => p.emailable || p.linkedin);\n\nconst parBloc = new Map();\nfor (const p of eligibles) {\n  if (!parBloc.has(p.bloc)) parBloc.set(p.bloc, []);\n  parBloc.get(p.bloc).push(p);\n}\n\nconst NIVEAUX = [1, 2, 3];\nconst garde = [];\nconst pris = new Set();\nconst compteur = {};\n\n// Rotation niveau 1 -> 2 -> 3 : la chaine de decision d'abord, l'approfondissement ensuite.\n// respecterQuota=false : plafond par fonction ignore, pour ATTEINDRE MAX coute que coute.\nfunction selectionner(filtre, respecterQuota) {\n  let progres = true;\n  while (garde.length < MAX && progres) {\n    progres = false;\n    for (const niv of NIVEAUX) {\n      if (garde.length >= MAX) break;\n      let choisi = null;\n      for (const b of BLOCS) {\n        if (b.niveau !== niv) continue;\n        if (respecterQuota && (compteur[b.cle] || 0) >= MAX_PAR_FONCTION) continue;\n        const c = (parBloc.get(b.cle) || []).find(p => filtre(p) && !pris.has(p.id));\n        if (!c) continue;\n        if (!choisi || c.score > choisi.score) choisi = c;\n      }\n      if (choisi) {\n        garde.push(choisi);\n        pris.add(choisi.id);\n        compteur[choisi.bloc] = (compteur[choisi.bloc] || 0) + 1;\n        progres = true;\n      }\n    }\n  }\n}\n\nconst avecEmail = p => p.emailable === 1;\nconst avecLinkedin = p => p.emailable === 0 && !!p.linkedin;\n\n// 1) emails, plafond par fonction respecte  -> largeur : on couvre les 3 niveaux\n// 2) emails restants, plafond ignore        -> on bouche avec les fonctions qui en ont\nselectionner(avecEmail, true);\nselectionner(avecEmail, false);\nconst nbAvecEmail = garde.length;\n\n// 3) LinkedIn seuls, meme logique : largeur puis bouchage, pour atteindre MAX\nif (INCLURE_SANS_EMAIL && nbAvecEmail < MAX && nbAvecEmail <= SEUIL_COMPLEMENT) {\n  selectionner(avecLinkedin, true);\n  selectionner(avecLinkedin, false);\n}\n\ngarde.sort((a, b) => (b.emailable - a.emailable) || (a.niveau - b.niveau) || (b.score - a.score));\n\nconst enrichables = garde.filter(p => p.emailable);\nconst sansEmail   = garde.filter(p => !p.emailable);\n\nconst base = {\n  _societe: soc._nom_affiche,\n  _vus: parId.size,\n  _eligibles: eligibles.length,\n  _avec_email: enrichables.length,\n  _sans_email: sansEmail.length,\n  _fonctions: garde.map(p => p.bloc),\n  _niveaux: garde.map(p => p.niveau),\n};\n\n// --- Aucun contact retenu ---\n// On ecrit quand meme UNE ligne dans l'Annuaire, au nom de l'entreprise, pour garder\n// la trace du passage : sans ca, une societe sans contact serait invisible et on ne\n// saurait pas la distinguer d'une societe jamais traitee.\nif (!garde.length) {\n  return [{ json: {\n    ...base,\n    _vide: true,\n    _zeroContact: true,\n    _nb_a_ecrire: 1,\n    details: [], meta: [], metaSansEmail: [],\n  }}];\n}\n\nconst lots = [];\nif (enrichables.length) {\n  for (let i = 0; i < enrichables.length; i += 10) {\n    const tranche = enrichables.slice(i, i + 10);\n    lots.push({ json: {\n      ...base,\n      _vide: false, _zeroContact: false,\n      _nb_a_ecrire: tranche.length + (i === 0 ? sansEmail.length : 0),\n      details: tranche.map(p => ({ id: p.id })),\n      meta: tranche,\n      metaSansEmail: i === 0 ? sansEmail : [],\n    }});\n  }\n} else {\n  lots.push({ json: {\n    ...base,\n    _vide: false, _zeroContact: false,\n    _nb_a_ecrire: sansEmail.length,\n    details: [], meta: [], metaSansEmail: sansEmail,\n  }});\n}\nreturn lots;"
+      },
+      "id": "125919ee-7f09-40ad-b699-f67a66c62c00",
+      "name": "Classer prospects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        -304
+      ],
+      "notes": "Classement local sur les 10 fonctions cibles + dedup Annuaire + lots de 10 pour bulk_match."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dp1",
+              "leftValue": "={{ $json._nb_a_ecrire || 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "edb0d5a1-627a-45b8-aa7a-c8ddef862188",
+      "name": "Des prospects",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3504,
+        -304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/bulk_match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Config').first().json.APOLLO_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ details: $json.details }) }}",
+        "options": {}
+      },
+      "id": "02ab43ef-1389-4135-b622-c19089847ac0",
+      "name": "Apollo - Enrichir",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4176,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "SEUL appel qui consomme des credits (1 par email revele). 10 personnes max par appel. Telephone volontairement non demande."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construit le bloc de lignes a ajouter dans l'Annuaire, aligne sur les EN-TETES REELS.\n// Email_Statut, Action et Score sont laisses VIDES (traites en aval / desactives).\n//   Source  = nom de la feuille source        Secteur = secteur reel trouve par l'IA\n// Statut : \"Nouveau\" | \"0 contact\" (societe sans contact) |\n//          \"Contact FR non trouve\" (aucun contact francais : repli sur des etrangers, max 5).\nconst soc = $('Parser qualification').first().json;\nconst aujourdhui = new Date().toISOString().slice(0, 10);\n\nconst ECRIRE_SCORE = false;\nconst TROU_MAX     = 100;\nconst MAX_ETRANGER = $('Config').first().json.MAX_CONTACTS_ETRANGER ?? 5;\n\n// Repli etranger signale par les filtres de localisation, relaye par \"Sonde motif\".\nlet replriEtranger = false;\ntry { replriEtranger = $('Sonde motif').first().json._fallback_hors_france === true; } catch (e) {}\n\n// ================= GARDE-FOU ANTI-DOUBLON INTRA-RUN =================\n// n8n RECOUD les connexions quand on supprime un noeud : un lien direct peut reapparaitre\n// par-dessus une branche d'IF et creer un second chemin vers ce mappeur. C'est arrive trois\n// fois, dont une sur deux etages -> les memes 10 contacts ecrits 4 fois. On refuse donc\n// d'emettre un ID_Prospect deja emis PENDANT CE RUN, quel que soit le cablage.\nconst dejaEmis = new Set();\nfor (let r = 0; r < 500; r++) {\n  let items;\n  try { items = $('Mapper Annuaire').all(0, r); } catch (e) { break; }\n  if (!items || !items.length) break;\n  for (const it of items) {\n    for (const id of ((it.json && it.json._ids) || [])) if (id) dejaEmis.add(String(id));\n  }\n}\n\nconst rep = $('Lire Annuaire').first().json;\nconst src = rep.body ?? rep;\nconst vals    = Array.isArray(src.values) ? src.values : [];\nconst address = String(src.address || '');\n\nconst mDeb = address.match(/!\\$?([A-Z]+)\\$?(\\d+)/i);\nconst colDepart   = mDeb ? mDeb[1].toUpperCase() : 'A';\nconst ligneDepart = mDeb ? parseInt(mDeb[2], 10) : 1;\n\n// !! usedRange MENT : il inclut les lignes/colonnes seulement MISES EN FORME (observe A1:X10000\n// pour ~160 lignes de donnees). On se fie donc au CONTENU.\nconst enteteBrut = (vals[0] || []).map(h => String(h ?? '').trim());\nlet nbColonnes = 0;\nenteteBrut.forEach((h, i) => { if (h) nbColonnes = i + 1; });\nif (!nbColonnes) {\n  throw new Error('En-tetes de la feuille Annuaire introuvables (address=' + address + ').');\n}\nconst entetes = enteteBrut.slice(0, nbColonnes);\n\n// Hauteur reelle = fin du bloc RATTACHE a l'en-tete ; les grappes isolees sont ecartees.\nconst remplies = [];\nvals.forEach((r, i) => { if ((r || []).some(c => String(c ?? '').trim() !== '')) remplies.push(i); });\nlet k = remplies.length - 1;\nwhile (k >= 0) {\n  let deb = k;\n  while (deb > 0 && remplies[deb] - remplies[deb - 1] <= TROU_MAX) deb--;\n  if (deb === 0) break;\n  k = deb - 1;\n}\nconst dernierIndex = k >= 0 ? remplies[k] : 0;\nlet derniereLigne  = ligneDepart + dernierIndex;\nconst egarees = remplies.filter(i => i > dernierIndex).map(i => ligneDepart + i);\n\n// --- CORRECTION DE DECALAGE INTRA-RUN ---\n// \"Lire Annuaire\" est en executeOnce : son instantane date du DEBUT du run. Sans ca, chaque\n// societe de la boucle repartirait de la meme ligne et ecraserait la precedente.\nfor (let r = 0; r < 500; r++) {\n  let items;\n  try { items = $('Ecrire Annuaire').all(0, r); } catch (e) { break; }\n  if (!items || !items.length) break;\n  const rep2 = items[0].json || {};\n  const a = String((rep2.body ? rep2.body.address : rep2.address) || '');\n  const m = a.match(/:\\$?[A-Z]+\\$?(\\d+)\\s*$/i);\n  if (m) derniereLigne = Math.max(derniereLigne, parseInt(m[1], 10));\n}\n\nconst colVersNum = s => [...s].reduce((a, c) => a * 26 + (c.charCodeAt(0) - 64), 0);\nconst numVersCol = n => { let s = ''; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; };\n\nconst entreprise    = soc._nom_affiche || soc._nom_recherche || '';\nconst feuilleSource = soc._sheet || soc._classe || '';\nconst secteurMetier = (soc._secteur && soc._secteur !== 'NOT_FOUND') ? soc._secteur : '';\nconst siteWeb       = (soc._site_web && soc._site_web !== 'NOT_FOUND') ? soc._site_web : '';\nconst STATUT_BASE   = replriEtranger ? 'Contact FR non trouve' : 'Nouveau';\n\nconst emailDe = m => {\n  const e = (m && m.email) || '';\n  return (e && !String(e).includes('email_not_unlocked')) ? e : '';\n};\n\nfunction gabarit() {\n  return {\n    'ID_Prospect': '', 'Entreprise': entreprise, 'Domaine': '', 'Secteur': secteurMetier,\n    'Décideur': '', 'Post': '', 'Email': '', 'Email_Statut': '', 'Linkedin': '',\n    'Téléphone': '', 'Statut Téléphone': '', 'Source': feuilleSource,\n    'Date_Ajout': aujourdhui, 'Statut': STATUT_BASE, 'Score': '', 'Action': '',\n    'Date_J0': '', 'Date_J5': '', 'Date_J12': '', 'Tel_verifie': '', '_idx': '',\n  };\n}\n\nconst prospects = [];\nlet domaineEntreprise = '';\nlet domaineMotif = '';\nlet motifUtilise = '';\nlet nbDeduits = 0;\n\nconst items = $input.all().map(i => i.json || {});\nconst zeroContact = items.some(j => j._zeroContact === true);\n\nif (zeroContact) {\n  // Societe sans aucun contact : une ligne au nom de l'entreprise, pour garder la trace du\n  // passage. Sans elle, on ne distinguerait pas une societe sans contact d'une societe jamais\n  // traitee.\n  const l = gabarit();\n  l['ID_Prospect'] = 'AUCUN-' + (soc._siren || (feuilleSource + '-L' + (soc._rowNumber || '')));\n  l['Domaine'] = soc._domaine || siteWeb;\n  l['Statut'] = '0 contact';\n  prospects.push(l);\n} else {\n  const paires = [];\n  for (const j of items) {\n    const meta    = j.meta || [];\n    const matches = j.matches || [];\n    const deduits = j.deduits || [];\n    const sans    = j.metaSansEmail || [];\n\n    if (j._domaine_motif && !domaineMotif) domaineMotif = j._domaine_motif;\n    if (j._motif) motifUtilise = j._motif;\n\n    const n = Math.max(matches.length, meta.length);\n    for (let x = 0; x < n; x++) {\n      const m = matches[x] || {};\n      const p = meta[x] || {};\n      if (!m.id && !p.id) continue;\n      paires.push({ m, p });\n    }\n    for (const p of deduits) {\n      if (!p.id) continue;\n      nbDeduits++;\n      paires.push({ m: { id: p.id, email: p.email }, p });\n    }\n    for (const p of sans) {\n      if (!p.id) continue;\n      paires.push({ m: null, p });\n    }\n  }\n\n  if (!paires.length) {\n    throw new Error('Lot non vide mais aucun prospect appariable (societe ' + entreprise + ').');\n  }\n\n  // UN SEUL domaine par entreprise, celui de la MESSAGERIE : Apollo renvoie le domaine VITRINE\n  // (airfrance.com) alors que les salaries sont en airfrance.fr. Le calcul par frequence evite\n  // aussi qu'un groupe issu de fusions (SEKO / Bansard / B2C Trans) affiche trois domaines.\n  const freq = {};\n  for (const { m } of paires) {\n    const e = emailDe(m);\n    const d = e.includes('@') ? e.split('@')[1].toLowerCase() : '';\n    if (d) freq[d] = (freq[d] || 0) + 1;\n  }\n  const tri = Object.entries(freq).sort((a, b) => b[1] - a[1]);\n  domaineEntreprise = (tri.length && tri[0][0]) || domaineMotif || soc._domaine || siteWeb || '';\n\n  for (const { m, p } of paires) {\n    const l = gabarit();\n    l['ID_Prospect'] = (m && m.id) || p.id;\n    l['Domaine'] = domaineEntreprise;\n    l['Décideur'] = (m && m.name) || [m && m.first_name, m && m.last_name].filter(Boolean).join(' ') || p.name || '';\n    l['Post'] = (m && m.title) || p.title || '';\n    l['Email'] = emailDe(m);\n    l['Linkedin'] = (m && m.linkedin_url) || p.linkedin || '';\n    l['Score'] = ECRIRE_SCORE ? (soc._score ?? '') : '';\n    prospects.push(l);\n  }\n}\n\n// Repli etranger : plafond de securite. \"Sonde motif\" a deja limite l'enrichissement, ce slice\n// ne fait que garantir le nombre de lignes ecrites.\nconst plafonnes = (replriEtranger && !zeroContact) ? prospects.slice(0, MAX_ETRANGER) : prospects;\n\n// Garde-fou anti-doublon\nconst retenus = plafonnes.filter(p => !dejaEmis.has(String(p['ID_Prospect'])));\nconst ignoresDoublon = plafonnes.length - retenus.length;\nif (!retenus.length) return [];\n\n// Alignement souple sur les en-tetes reels : la cle ignore casse, accents, espaces, underscores.\nconst cle = s => String(s || '').toLowerCase().normalize('NFD')\n  .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');\n\nconst parCle = {};\nentetes.forEach((h, i) => { if (h) parCle[cle(h)] = i; });\nconst ALIAS = { linkedin: ['linledin', 'linkedin', 'linkedln'] };\n\nfunction colonneDe(nom) {\n  const k2 = cle(nom);\n  if (parCle[k2] !== undefined) return parCle[k2];\n  const alias = ALIAS[k2];\n  if (alias) for (const a of alias) if (parCle[a] !== undefined) return parCle[a];\n  return undefined;\n}\n\nconst inconnues = new Set();\nconst lignes = retenus.map(p => {\n  const row = new Array(nbColonnes).fill('');\n  for (const [c1, v] of Object.entries(p)) {\n    const c = colonneDe(c1);\n    if (c === undefined) { inconnues.add(c1); continue; }\n    row[c] = v;\n  }\n  return row;\n});\n\nconst debut  = derniereLigne + 1;\nconst fin    = debut + lignes.length - 1;\nconst colFin = numVersCol(colVersNum(colDepart) + nbColonnes - 1);\n\nreturn [{ json: {\n  _address: colDepart + debut + ':' + colFin + fin,\n  _nb: lignes.length,\n  _ids: retenus.map(p => p['ID_Prospect']),\n  _fallback_hors_france: replriEtranger,\n  _ignores_doublon: ignoresDoublon,\n  _zero_contact: zeroContact,\n  _domaine: domaineEntreprise,\n  _motif: motifUtilise,\n  _nb_deduits: nbDeduits,\n  _motif_source: items.map(j => j._motif_source).filter(Boolean).join(','),\n  _credits_apollo: items.reduce((s, j) => s + (j.matches || []).length, 0),\n  _zone_lue: address,\n  _derniere_ligne_bloc: derniereLigne,\n  _lignes_egarees: egarees,\n  _colonnes: nbColonnes,\n  _colonnes_non_mappees: [...inconnues],\n  values: lignes,\n}}];"
+      },
+      "id": "aabfcbf2-2d74-4c42-b62b-7c76b96e91e4",
+      "name": "Mapper Annuaire",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        -304
+      ],
+      "notes": "Les cles doivent correspondre EXACTEMENT aux en-tetes de la feuille Annuaire."
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "c1f4deb6-85dd-47ac-88e5-b1bedd218181",
+      "name": "Pause",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        6416,
+        128
+      ],
+      "webhookId": "A_REGENERER",
+      "notes": "Respire entre 2 societes (rate limit Apollo)."
+    },
+    {
+      "parameters": {
+        "jsCode": "let prep = [];\ntry { prep = $('Preparer societes').all(); } catch (e) {}\nconst p = prep[0]?.json || {};\n\n// Bilan sur TOUTES les iterations de la boucle (all() ne rend que la derniere,\n// il faut donc parcourir les runs un par un).\nconst parClasse = {};\nconst scores = [];\nlet coutIaUsd = 0, echecsIa = 0, dureeIaMs = 0, societes = 0;\n\nfor (let r = 0; r < 1000; r++) {\n  let items;\n  try { items = $('Parser qualification').all(0, r); } catch (e) { break; }\n  if (!items || !items.length) break;\n  const q = items[0].json;\n  societes++;\n  const k = q._ia_ok ? (q._classification || '?') : 'ECHEC_IA';\n  parClasse[k] = (parClasse[k] || 0) + 1;\n  if (!q._ia_ok) echecsIa++;\n  if (typeof q._score === 'number') scores.push(q._score);\n  if (typeof q._ia_cout_usd === 'number') coutIaUsd += q._ia_cout_usd;\n  if (typeof q._ia_duree_ms === 'number') dureeIaMs += q._ia_duree_ms;\n}\n\n// Lignes reellement ecrites dans l'Annuaire pendant ce run\nlet lignesEcrites = 0;\nfor (let r = 0; r < 1000; r++) {\n  let items;\n  try { items = $('Mapper Annuaire').all(0, r); } catch (e) { break; }\n  if (!items || !items.length) break;\n  lignesEcrites += items[0].json._nb || 0;\n}\n\nconst moyenne = scores.length\n  ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10\n  : null;\n\nreturn [{ json: {\n  societes_traitees_ce_run: societes,\n  societes_restantes_apres_filtre: p._candidates_total ?? null,\n  lignes_ecrites_annuaire: lignesEcrites,\n  lignes_sans_nom_ignorees: p._ignorees ?? 0,\n  qualification_par_classe: parClasse,\n  score_moyen: moyenne,\n  echecs_ia: echecsIa,\n  cout_ia_usd_indicatif: Math.round(coutIaUsd * 10000) / 10000,\n  duree_ia_totale_s: Math.round(dureeIaMs / 1000),\n  fin: new Date().toISOString(),\n}}];"
+      },
+      "id": "625e5d8b-65df-4a94-a145-05d51d10df32",
+      "name": "Resume run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -432
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.microsoft.com/v1.0/me/drive/items/22002ED2757F43B18C70ACEB7FAB3A78/workbook/worksheets",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftExcelOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "1229e50b-4ddf-445d-95f3-2a649a7b5612",
+      "name": "Lister feuilles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1872,
+        32
+      ],
+      "retryOnFail": false,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "⚠️ CHOISIR LA CREDENTIAL : Microsoft Excel contact.\nAppel Graph direct : le noeud Excel 'worksheet:getAll' renvoie 404 sur ce classeur.\nneverError=true : on garde le corps de la reponse meme en 404, pour voir le vrai message."
+    },
+    {
+      "parameters": {
+        "jsCode": "const rep = $input.first().json;\nconst src = rep.body ?? rep;\nconst feuilles = Array.isArray(src.value) ? src.value : [];\nconst f = feuilles.find(w => String(w.name || '').trim() === 'Annuaire');\nif (!f) {\n  throw new Error('Feuille \"Annuaire\" introuvable. Feuilles du classeur : ' + feuilles.map(w => w.name).join(' | '));\n}\nreturn [{ json: { annuaireId: f.id, annuaireNom: f.name } }];"
+      },
+      "id": "6befe9ee-9231-4cd6-b7db-bdcbd28c53eb",
+      "name": "Cible Annuaire",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        32
+      ],
+      "notes": "Resout le worksheetId de la feuille Annuaire."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.GRAPH }}/worksheets/{{ encodeURIComponent($json.annuaireId) }}/usedRange",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftExcelOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "address,values"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "419a0907-4362-4fec-b946-90334296e85d",
+      "name": "Lire Annuaire",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1424,
+        32
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      },
+      "notes": "⚠️ CHOISIR LA CREDENTIAL : Microsoft Excel contact.\nLit la zone utilisee de l'Annuaire : en-tetes reels + lignes existantes (anti-doublon) + derniere ligne (pour l'ajout)."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.GRAPH }}/worksheets/{{ encodeURIComponent($json.sheetId) }}/usedRange",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftExcelOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "address,values"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "24806ed6-4b6b-4707-b719-f94d3ac17471",
+      "name": "Lire feuille source",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -752,
+        32
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      },
+      "notes": "⚠️ CHOISIR LA CREDENTIAL : Microsoft Excel contact.\nusedRange renvoie l'adresse (ex 'A1:L7') ET les valeurs -> on en deduit le NUMERO DE LIGNE reel de chaque societe."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.GRAPH }}/worksheets/{{ encodeURIComponent($('Cible Annuaire').first().json.annuaireId) }}/range(address='{{ $json._address }}')",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftExcelOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: $json.values }) }}",
+        "options": {}
+      },
+      "id": "53c634e6-9051-4ec2-847b-12113a349f4b",
+      "name": "Ecrire Annuaire",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5968,
+        -304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      },
+      "notes": "⚠️ CHOISIR LA CREDENTIAL : Microsoft Excel contact.\nPATCH d'un bloc de lignes a la suite de l'Annuaire."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.GRAPH }}/worksheets/{{ encodeURIComponent($('Parser qualification').first().json._sheetId) }}/range(address='{{ $('Parser qualification').first().json._colApollo }}{{ $('Parser qualification').first().json._rowNumber }}')",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftExcelOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [[ $('Parser qualification').first().json._apollo_statut ]] }) }}",
+        "options": {}
+      },
+      "id": "9ea15421-a215-4d8b-99b1-8a2c9a564808",
+      "name": "Marquer societe traitee",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6192,
+        -160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      },
+      "notes": "⚠️ CHOISIR LA CREDENTIAL : Microsoft Excel contact.\nPATCH d'UNE cellule : la feuille est dans l'URL, l'address ne contient donc aucun nom de feuille -> plus de 404."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construit le prompt de qualification. AUCUNE donnee personnelle n'est envoyee :\n// uniquement des donnees d'entreprise (raison sociale, SIREN, NAF, commune).\nconst soc = $input.first().json;\nconst cfg = $('Config').first().json;\nconst SCORING = cfg.IA_SCORING === true;\nconst SEUIL = cfg.SEUIL_CORE ?? 7;\n\nconst l = (label, v) => {\n  const s = String(v ?? '').trim();\n  return (s && s !== '-') ? label + ' : ' + s : null;\n};\n\nconst fiche = [\n  l('Raison sociale', soc._raison),\n  l('Nom commercial', soc._enseigne),\n  l('SIREN', soc._siren),\n  l('Code NAF', soc._naf),\n  l('Commune', soc._commune),\n  l('Taille', soc._taille),\n  l('Tranche effectif', soc._effectif),\n  l('Categorie interne', soc._classe),\n  l('Nom retenu par Apollo', soc._org_nom),\n  l('Domaine connu', soc._domaine),\n].filter(Boolean).join('\\n');\n\n// Metiers que acme FOURNIT. Sert de vocabulaire prioritaire, pas de liste fermee :\n// une liste fermee renvoyait NOT_FOUND sur toute compagnie aerienne (Air Corsica, Air Austral)\n// et forcait de faux choix sur les autres (Singapore Airlines classee \"escale\").\nconst SECTEURS = [\n  '  handling   assistance en escale, piste, bagages, avitaillement',\n  '  surete     surete ou securite aeroportuaire, controle, filtrage',\n  '  catering   restauration aerienne, commissariat de bord',\n  '  fret       fret aerien, cargo, transitaire, logistique aeroportuaire',\n  '  escale     operations d escale, coordination avion, agent de trafic',\n  '  accueil    accueil passagers, agent d accueil, service en aerogare',\n  '  pmr        assistance aux personnes a mobilite reduite',\n  '  nettoyage  nettoyage ou proprete (cabine, aerogare, locaux)',\n].join('\\n');\n\nlet prompt;\n\nif (!SCORING) {\n  // --- Mode SECTEUR SEUL ---\n  // On veut le secteur REEL de l'entreprise, pas le metier qu'elle achete a acme.\n  prompt = [\n    'Tu identifies le SECTEUR D ACTIVITE REEL d une entreprise, pour acme INTERIM,',\n    'agence de travail temporaire specialisee dans les metiers aeroportuaires en',\n    'Ile-de-France (Roissy CDG, Orly, Le Bourget).',\n    '',\n    'ENTREPRISE',\n    fiche,\n    '',\n    'Si l entreprise exerce l un des metiers ci-dessous, emploie EXACTEMENT ce mot-cle :',\n    SECTEURS,\n    '',\n    'Sinon, donne son secteur reel en 1 a 3 mots, en francais et en minuscules.',\n    'Exemples : compagnie aerienne, transitaire, organisme de formation, travail temporaire,',\n    'maintenance aeronautique, hotellerie, restauration, transport routier.',\n    'Ne reponds NOT_FOUND que si tu ne connais vraiment pas cette entreprise. N invente pas.',\n    '',\n    'REPONSE : un seul objet JSON strict. AUCUN texte autour, AUCUN bloc de code markdown.',\n    '{\"secteur\":\"compagnie aerienne\",\"site_web\":\"exemple.fr\"}',\n    '',\n    '\"site_web\" : le domaine principal si tu le connais avec certitude, sinon NOT_FOUND.',\n  ].join('\\n');\n} else {\n  // --- Mode COMPLET : secteur + classification + score ---\n  prompt = [\n    'Tu qualifies une entreprise pour acme INTERIM, agence de travail temporaire specialisee',\n    'dans les metiers AEROPORTUAIRES en Ile-de-France (Roissy CDG, Orly, Le Bourget).',\n    'acme fournit du personnel OPERATIONNEL : piste, bagagiste, agent d escale, accueil, PMR,',\n    'surete, catering, fret, nettoyage.',\n    '',\n    'ENTREPRISE A QUALIFIER',\n    fiche,\n    '',\n    'ETAPE 1 - CLASSIFICATION (etiquette informative, elle ne bloque rien)',\n    '  CORE = coeur de cible commerciale, score >= ' + SEUIL,\n    '  EDGE = cible peripherique exploitable, score < ' + SEUIL,\n    '  OUT  = hors cible commerciale. Donne alors la valeur EXACTE ci-dessous dans \"raison\" :',\n    '    ETT_concurrente | compagnie_aerienne | organisme_formation | hors_aero |',\n    '    logistique_non_aero | poste_bureau | support_non_operationnel |',\n    '    poste_mixte_non_clair | entreprise_non_identifiable',\n    '',\n    'ETAPE 2 - SCORING - additif, sur 10, TOUJOURS renseigne (meme si OUT)',\n    '  +4  entreprise aviation confirmee   +3  metier terrain',\n    '  +2  CDG / Orly / Le Bourget         +1  contrat court / interim',\n    '',\n    'ETAPE 3 - SECTEUR reel de l entreprise.',\n    'Si elle exerce l un des metiers ci-dessous, emploie EXACTEMENT ce mot-cle :',\n    SECTEURS,\n    'Sinon, donne son secteur reel en 1 a 3 mots, en francais et en minuscules',\n    '(ex : compagnie aerienne, transitaire, organisme de formation).',\n    '',\n    'REPONSE : un seul objet JSON strict. AUCUN texte autour, AUCUN bloc de code markdown.',\n    '{\"pertinent\":true,\"raison\":\"explication courte\",\"secteur\":\"handling\",\"score\":8,\"classification\":\"CORE\",\"site_web\":\"exemple.fr\"}',\n    '',\n    '\"pertinent\" : false uniquement quand la classification est OUT.',\n    '\"site_web\"  : le domaine principal si tu le connais avec certitude, sinon NOT_FOUND. N invente pas.',\n  ].join('\\n');\n}\n\nreturn [{ json: { ...soc, prompt } }];"
+      },
+      "id": "2e2e5438-0ae0-4754-aa42-892a2e7667e0",
+      "name": "Prompt qualification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -288
+      ],
+      "notes": "Construit le prompt. Aucune donnee personnelle : uniquement des donnees d'entreprise publiques."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Appel du CLI Claude Code embarque dans l'image n8n-custom, via le wrapper claude-run.\n//\n// CONTRAINTE STRUCTURANTE (ne pas contourner) : le jeton est un FICHIER\n// (/run/claude/token), relu par le wrapper A CHAQUE APPEL, dans le process fils.\n// Le task runner n8n filtre l'environnement a 13 variables et bloque process.env :\n// ce noeud ne peut PAS lire le jeton, et ne doit pas essayer.\n// Changer de compte = reecrire /opt/n8n/secrets/claude/token cote hote (dossier monte).\nconst cfg = $('Config').first().json;\nconst debut = Date.now();\n\n// --- Interrupteur : qualification IA desactivee ---\nif (cfg.QUALIFICATION_IA === false) {\n  return [{ json: {\n    desactive: true,\n    sortie: '', sortieErreur: null, erreur: null, codeSortie: 0,\n    dureeAppelMs: 0, rang: null, quotaEpuise: false, messageApi: null,\n  }}];\n}\n\nconst mod = require('child_process');\nconst prompt = String($input.first().json.prompt || '');\n\nlet sortie = '';\nlet sortieErreur = null;\nlet erreur = null;\nlet codeSortie = 0;\n\ntry {\n  // execFileSync : arguments en TABLEAU, sans shell -> aucune injection possible.\n  sortie = String(mod.execFileSync(\n    'claude-run',\n    ['-p', prompt, '--output-format', 'json', '--model', cfg.MODELE_IA || 'sonnet'],\n    { encoding: 'utf8', timeout: cfg.TIMEOUT_IA_MS || 270000, maxBuffer: 33554432, cwd: '/tmp' }\n  ));\n} catch (err) {\n  codeSortie = (err && typeof err.status === 'number') ? err.status : -1;\n  erreur = String((err && err.message) || err).slice(0, 400);\n  sortie = (err && err.stdout) ? String(err.stdout) : '';\n  sortieErreur = (err && err.stderr) ? String(err.stderr).slice(0, 3000) : null;\n}\n\n// Le wrapper annonce le compte utilise sur stderr : \"rang=abonnement\" ou \"rang=api\".\nconst mRang = /rang=(\\w+)/.exec(sortieErreur || '');\n\n// Diagnostic quota : le CLI renvoie du JSON meme en erreur.\nlet quotaEpuise = false;\nlet messageApi = null;\nconst i = sortie.indexOf('{');\nif (i >= 0) {\n  try {\n    const env = JSON.parse(sortie.slice(i, sortie.lastIndexOf('}') + 1));\n    messageApi = env.result ? String(env.result).slice(0, 200) : null;\n    quotaEpuise = env.api_error_status === 429;\n  } catch (e) { /* sortie illisible */ }\n}\nif (quotaEpuise) {\n  erreur = 'QUOTA EPUISE sur le compte actif' + (messageApi ? ' -- ' + messageApi : '')\n    + ' | Basculer : cp /opt/n8n/secrets/claude-comptes/<compte>.token'\n    + ' /opt/n8n/secrets/claude/token && chown 1000:1000 ... && chmod 400 ...';\n}\n\nreturn [{ json: {\n  desactive: false,\n  sortie, sortieErreur, erreur, codeSortie,\n  dureeAppelMs: Date.now() - debut,\n  rang: mRang ? mRang[1] : null,\n  quotaEpuise, messageApi,\n} }];"
+      },
+      "id": "e1778ace-6169-4eb6-b723-78fedc520127",
+      "name": "Qualification IA (Claude CLI)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        -288
+      ],
+      "retryOnFail": false,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "Appelle /usr/local/bin/claude-run dans le conteneur n8n. execFileSync : arguments en tableau, pas de shell, donc pas d'injection possible."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deballe la sortie du CLI puis le JSON metier, et VALIDE chaque champ.\n// Le wrapper claude-run imprime une ligne \"rang=...\" avant le JSON : pas de JSON.parse\n// direct possible, il faut isoler le premier objet.\nconst cfg = $('Config').first().json;\nconst SCORING = cfg.IA_SCORING === true;\nconst soc = $('Choisir societe').first().json;\nconst r = $input.first().json;\n\nconst SECTEURS = ['handling','surete','catering','fret','escale','accueil','pmr','nettoyage'];\nconst RAISONS_OUT = ['ETT_concurrente','poste_bureau','hors_aero','compagnie_aerienne',\n  'logistique_non_aero','support_non_operationnel','poste_mixte_non_clair',\n  'entreprise_non_identifiable','organisme_formation'];\n\nconst statutBase = () => (soc._match ? 'TRUE' : 'NO_MATCH');\n\n// --- Qualification IA desactivee : passage en neutre ---\nif (r.desactive === true) {\n  return [{ json: {\n    ...soc,\n    _pertinent: true, _classification: '', _score: null,\n    _secteur: 'NOT_FOUND', _raison: '', _site_web: 'NOT_FOUND',\n    _apollo_statut: statutBase(),\n    _ia_ok: true, _ia_desactivee: true, _ia_diag: null,\n    _ia_cout_usd: null, _ia_duree_ms: 0,\n  }}];\n}\n\nfunction premierObjetJson(txt) {\n  const s = String(txt ?? '');\n  const i = s.indexOf('{');\n  const j = s.lastIndexOf('}');\n  if (i < 0 || j <= i) return null;\n  try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; }\n}\n\nlet qualif = null;\nlet diag = r.erreur || null;\nlet coutUsd = null;\n\nconst enveloppe = premierObjetJson(r.sortie);\nif (enveloppe) {\n  coutUsd = enveloppe.total_cost_usd ?? null;\n  if (enveloppe.is_error) diag = diag || 'CLI is_error';\n  const texte = enveloppe.result ?? enveloppe.text ?? enveloppe.content ?? '';\n  qualif = premierObjetJson(typeof texte === 'string' ? texte : JSON.stringify(texte));\n  if (!qualif && (enveloppe.secteur !== undefined || enveloppe.pertinent !== undefined)) qualif = enveloppe;\n}\nif (!qualif) {\n  diag = diag || ('reponse IA illisible : ' + String(r.sortie || r.sortieErreur || '(vide)').slice(0, 300));\n}\n\n// --- Champs communs aux deux modes ---\n// Le secteur est du TEXTE LIBRE court. L'ancienne validation le forcait a appartenir aux 8\n// metiers acme, ce qui renvoyait NOT_FOUND sur toute compagnie aerienne (Air Corsica,\n// Air Austral) : la colonne restait vide sur des societes parfaitement identifiees.\n// On garde les 8 mots-cles comme vocabulaire prioritaire cote prompt, sans les imposer ici.\nlet secteur = 'NOT_FOUND', siteWeb = 'NOT_FOUND';\nif (qualif) {\n  secteur = String(qualif.secteur || '').toLowerCase().trim()\n    .replace(/[\"'`\\r\\n]/g, ' ').replace(/\\s+/g, ' ').slice(0, 40);\n  // Une phrase n'est pas un secteur : au-dela de 4 mots, l'IA a mal repondu.\n  if (!secteur || secteur === 'not_found' || secteur.split(' ').length > 4) secteur = 'NOT_FOUND';\n  siteWeb = String(qualif.site_web || 'NOT_FOUND').trim();\n}\n\n// --- Mode SECTEUR SEUL : ni score ni classification ---\nif (!SCORING) {\n  return [{ json: {\n    ...soc,\n    _pertinent: true, _classification: '', _score: null,\n    _secteur: secteur, _raison: '', _site_web: siteWeb,\n    // chaine vide si l'IA a echoue -> societe non marquee, reprise au prochain run\n    _apollo_statut: qualif ? statutBase() : '',\n    _ia_ok: !!qualif, _ia_desactivee: false, _ia_diag: diag,\n    _ia_cout_usd: coutUsd, _ia_duree_ms: r.dureeAppelMs ?? null,\n  }}];\n}\n\n// --- Mode COMPLET ---\nlet pertinent = false, classification = 'OUT', score = 0, raison = '';\nif (qualif) {\n  pertinent = qualif.pertinent === true;\n  classification = String(qualif.classification || (pertinent ? 'EDGE' : 'OUT')).toUpperCase().trim();\n  if (!['CORE','EDGE','OUT'].includes(classification)) classification = pertinent ? 'EDGE' : 'OUT';\n  if (classification === 'OUT') pertinent = false;\n\n  score = Number(qualif.score);\n  if (!Number.isFinite(score)) score = 0;\n  score = Math.max(0, Math.min(10, Math.round(score)));\n\n  raison = String(qualif.raison || '').slice(0, 200);\n  if (!pertinent && !RAISONS_OUT.includes(raison)) diag = diag || ('raison hors liste : ' + raison);\n}\n\nlet statut = '';\nif (qualif) {\n  statut = classification + ' ' + score + '/10';\n  if (classification === 'OUT' && raison) statut += ' ' + raison;\n}\n\nreturn [{ json: {\n  ...soc,\n  _pertinent: pertinent, _classification: classification, _score: score,\n  _secteur: secteur, _raison: raison, _site_web: siteWeb,\n  _apollo_statut: statut,\n  _ia_ok: !!qualif, _ia_desactivee: false, _ia_diag: diag,\n  _ia_cout_usd: coutUsd, _ia_duree_ms: r.dureeAppelMs ?? null,\n}}];"
+      },
+      "id": "d0eaa125-216c-42e0-a275-249e92103a64",
+      "name": "Parser qualification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        -288
+      ],
+      "notes": "Deballe l'enveloppe du CLI (le wrapper imprime 'rang=...' avant le JSON) puis le JSON metier, et valide chaque champ."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ia1",
+              "leftValue": "={{ $json._ia_ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c4235b4b-bccb-4c55-9eb6-fb84aa00be77",
+      "name": "IA OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2160,
+        -288
+      ],
+      "notes": "Garde-fou TECHNIQUE (pas un filtre metier) : si l'appel IA a echoue, on n'ecrit rien et la societe repasse au prochain run. Evite des lignes d'annuaire figees a score 0."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ae1",
+              "leftValue": "={{ ($json.details || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "46d54e26-1256-49fb-beab-ba2d811251d2",
+      "name": "A enrichir",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3952,
+        -304
+      ],
+      "notes": "Les contacts sans email exploitable ne passent PAS par bulk_match (0 credit) mais sont quand meme ecrits, avec leur LinkedIn."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduit le MOTIF d'adresse email de l'entreprise a partir des SONDES : les seuls contacts\n// reellement enrichis. But : reconstituer les autres adresses sans racheter de credits Apollo.\n//\n// MOTEUR PARAMETRIQUE. On n'a plus une liste fermee de gabarits mais un espace de RECETTES\n// explore exhaustivement : ordre (prenom/nom, nom/prenom, prenom seul, nom seul) x troncature\n// (mot entier ou 1 a 4 lettres) x separateur ('' . - _) x style du prenom x style du nom.\n// 10 000 combinaisons testees par sonde, en moins d'une milliseconde. Mesure sur les adresses\n// reelles d'Air France : 16/16 reproduites, contre 10/16 avec l'ancienne liste de 16 gabarits.\n//\n// REGLE DE SECURITE : une recette n'est retenue que si elle reproduit TOUTES les sondes, au\n// caractere pres. C'est une INTERSECTION, pas un vote. Air France melange laurent.bourianne@,\n// thlaousse@ et auboutillier@ : intersection vide, donc aucune deduction et repli payant.\n// Mieux vaut payer que remplir l'Annuaire d'adresses fausses.\n//\n// !! Le moteur doit rester IDENTIQUE a celui de \"Parser motif\" : ici on detecte, la-bas on rend.\nconst cfg = $('Config').first().json;\nconst MOTIF_IA = cfg.MOTIF_IA ?? false;\n\nconst lot = $('Sonde motif').first().json;\nconst rep = $input.first().json;\nconst src = rep.body ?? rep;\n\nconst matches = src.matches || [];\nconst meta    = lot.meta || [];\n\nconst passe = {\n  matches: matches,\n  meta: meta,\n  metaSansEmail: lot.metaSansEmail || [],\n  aDeduire: lot.aDeduire || [],\n  detailsReste: lot.detailsReste || [],\n  _zeroContact: lot._zeroContact === true,\n  _societe: lot._societe || '',\n  _mode: lot._mode || 'complet',\n};\n\n// Normalisation FR : accents retires, apostrophes supprimees, prenoms composes et particules\n// eclates en mots. \"Jose-Marie D'Aubigne\" -> ['jose','marie','daubigne']\nfunction mots(s) {\n  const b = String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')\n    .toLowerCase().replace(/['’]/g, '')\n    .replace(/[^a-z0-9\\s-]/g, ' ').replace(/\\s+/g, ' ').trim();\n  return b.split(/[\\s-]+/).filter(Boolean);\n}\nfunction styles(s) {\n  const m = mots(s);\n  if (!m.length) return null;\n  return { traitUnion: m.join('-'), colle: m.join(''), point: m.join('.'),\n           premier: m[0], dernier: m[m.length - 1] };\n}\n\nconst STY   = ['traitUnion', 'colle', 'point', 'premier', 'dernier'];\nconst SEP   = ['', '.', '-', '_'];\nconst COUPE = [0, 1, 2, 3, 4];            // 0 = mot entier\nconst ORDRE = ['pn', 'np', 'p', 'n'];\n\nfunction rendre(r, sp, sn) {\n  const a = sp[r.sp], b = sn[r.sn];\n  if (!a || !b) return null;\n  const ca = r.cp ? a.slice(0, r.cp) : a;\n  const cb = r.cn ? b.slice(0, r.cn) : b;\n  if (r.ordre === 'p') return ca;\n  if (r.ordre === 'n') return cb;\n  return r.ordre === 'pn' ? ca + r.sep + cb : cb + r.sep + ca;\n}\nfunction cle(r) { return [r.ordre, r.cp, r.cn, r.sep, r.sp, r.sn].join('|'); }\n\nfunction recettes(mail, pre, nom) {\n  const sp = styles(pre), sn = styles(nom);\n  const set = new Set();\n  if (!sp || !sn) return set;\n  // Un suffixe numerique (flgarcia1) departage deux homonymes : il n'est PAS generalisable.\n  // On l'ecarte pour inferer la regle, et on ne le remet JAMAIS a la deduction.\n  const loc = mail.split('@')[0].replace(/\\d+$/, '');\n  if (!loc) return set;\n  for (const ordre of ORDRE) for (const cp of COUPE) for (const cn of COUPE)\n    for (const sep of SEP) for (const a of STY) for (const b of STY) {\n      const r = { ordre, cp, cn, sep, sp: a, sn: b };\n      if (rendre(r, sp, sn) === loc) set.add(cle(r));\n    }\n  return set;\n}\n\n// --- Intersection sur toutes les sondes ---\nlet inter = null;\nlet domaine = '';\nconst sondesVues = [];\nconst nonReconnues = [];\n\nfor (let i = 0; i < Math.max(matches.length, meta.length); i++) {\n  const m = matches[i] || {};\n  const p = meta[i] || {};\n  const brut = String(m.email || '');\n  const mail = (brut && brut.indexOf('email_not_unlocked') === -1) ? brut.toLowerCase() : '';\n  if (!mail) continue;\n\n  const pre = m.first_name || p.first_name || '';\n  const nm  = m.last_name  || p.last_name  || '';\n  if (!domaine) domaine = mail.split('@')[1];\n\n  const t = recettes(mail, pre, nm);\n  sondesVues.push(mail + ' (' + t.size + ')');\n  // Une adresse qu'AUCUNE recette ne reproduit signale presque toujours un ecart de NOM\n  // (surnom, nom d'epouse, translitteration), pas une regle exotique : l'espace parametrique\n  // couvre deja toutes les regles de chaine plausibles. C'est la seule chose que l'IA peut\n  // encore apporter ici.\n  if (!t.size) nonReconnues.push({ mail: mail, prenom: pre, nom: nm });\n  inter = (inter === null) ? t : new Set([...inter].filter(x => t.has(x)));\n}\n\nconst triples = inter ? [...inter] : [];\n\nconst commun = Object.assign({}, passe, {\n  _domaine_motif: domaine,\n  _sondes: sondesVues,\n  _nb_sondes_lues: sondesVues.length,\n  _non_reconnues: nonReconnues.map(x => x.mail),\n});\n\n// Cas 1 : une recette commune reproduit toutes les sondes -> aucun appel IA necessaire.\nif (triples.length) {\n  return [{ json: Object.assign({}, commun, {\n    _skipIA: true, _motif_source: 'parametrique', _triples: triples, prompt: '',\n  })}];\n}\n\n// Cas 2 : IA coupee, ou rien a corriger -> repli payant.\nif (!MOTIF_IA || !nonReconnues.length) {\n  return [{ json: Object.assign({}, commun, {\n    _skipIA: true, _motif_source: 'aucun', _triples: [], prompt: '',\n  })}];\n}\n\n// Cas 3 : on demande a l'IA le VRAI nom encode dans l'adresse. Elle ne propose jamais\n// d'adresse ni de regle : le code relance ensuite la recherche parametrique avec les noms\n// corriges et n'accepte le resultat que s'il reproduit toutes les sondes.\nconst prompt = [\n  \"Des adresses email professionnelles ne correspondent pas au nom connu de la personne.\",\n  'Cause habituelle : diminutif, nom de naissance ou nom d\\'epouse, translitteration, second prenom.',\n  '',\n  nonReconnues.map(x =>\n    '  adresse: ' + x.mail + '   nom connu: ' + x.prenom + ' ' + x.nom).join('\\n'),\n  '',\n  \"Pour chaque adresse, donne le prenom et le nom REELLEMENT encodes dans la partie avant le @.\",\n  \"Si l'adresse ne contient visiblement ni prenom ni nom (boite generique, matricule), mets null.\",\n  '',\n  'Reponds UNIQUEMENT par un objet JSON, sans texte autour :',\n  '{\"corrections\":[{\"adresse\":\"...\",\"prenom\":\"...\",\"nom\":\"...\"}]}',\n].join('\\n');\n\nreturn [{ json: Object.assign({}, commun, {\n  _skipIA: false, _motif_source: 'ia', _triples: [], prompt: prompt,\n  _a_corriger: nonReconnues,\n})}];"
+      },
+      "id": "097d6b9e-8ba6-4b66-9ff2-1c896e639010",
+      "name": "Prompt motif",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Meme mecanique que \"Qualification IA\" : execFileSync sur le wrapper /usr/local/bin/claude-run,\n// arguments en TABLEAU (pas de shell, donc aucune injection possible), timeout sous les 300 s du\n// task runner. Le jeton est lu par le wrapper dans /run/claude/token, dans le process FILS :\n// il n'est jamais visible ici, et process.env est de toute facon bloque dans le sandbox.\nconst mod = require('child_process');\nconst entree = $input.first().json;\n\n// Court-circuit : le gabarit a deja ete trouve de facon deterministe, ou l'IA est coupee.\n// On ne depense ni quota ni les ~17 s d'appel pour rien.\nif (entree._skipIA === true || !entree.prompt) {\n  return [{ json: Object.assign({}, entree, {\n    sortie: '', sortieErreur: null, erreur: null, codeSortie: 0, dureeAppelMs: 0,\n  })}];\n}\n\nconst cfg = $('Config').first().json;\nconst modele = cfg.MODELE_IA || 'sonnet';\nconst delai  = cfg.TIMEOUT_IA_MS || 270000;\nconst debut  = Date.now();\n\nlet sortie = '';\nlet sortieErreur = null;\nlet erreur = null;\nlet codeSortie = 0;\n\ntry {\n  sortie = String(mod.execFileSync(\n    'claude-run',\n    ['-p', entree.prompt, '--output-format', 'json', '--model', modele],\n    { encoding: 'utf8', timeout: delai, maxBuffer: 33554432, cwd: '/tmp' }\n  ));\n} catch (err) {\n  codeSortie = (err && typeof err.status === 'number') ? err.status : -1;\n  erreur = String((err && err.message) || err).slice(0, 400);\n  sortie = (err && err.stdout) ? String(err.stdout) : '';\n  sortieErreur = (err && err.stderr) ? String(err.stderr).slice(0, 3000) : null;\n}\n\n// On reinjecte la charge utile : sans ca, le parseur en aval perdrait les contacts a deduire.\nreturn [{ json: Object.assign({}, entree, {\n  sortie: sortie,\n  sortieErreur: sortieErreur,\n  erreur: erreur,\n  codeSortie: codeSortie,\n  dureeAppelMs: Date.now() - debut,\n})}];"
+      },
+      "id": "4bf18063-a003-48be-8d18-b160e608d358",
+      "name": "Motif IA (Claude CLI)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4624,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Applique la recette retenue aux contacts NON enrichis : une adresse par contact, construite\n// depuis leurs prenom/nom reels + le domaine des sondes. Rien n'est invente : sans recette sure,\n// on ne fabrique aucune adresse et on bascule sur le repli payant.\n//\n// !! Le moteur doit rester IDENTIQUE a celui de \"Prompt motif\" : la-bas on detecte, ici on rend.\nconst entree   = $input.first().json;\nconst aDeduire = entree.aDeduire || [];\nconst domaine  = entree._domaine_motif || '';\n\nfunction mots(s) {\n  const b = String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')\n    .toLowerCase().replace(/['’]/g, '')\n    .replace(/[^a-z0-9\\s-]/g, ' ').replace(/\\s+/g, ' ').trim();\n  return b.split(/[\\s-]+/).filter(Boolean);\n}\nfunction styles(s) {\n  const m = mots(s);\n  if (!m.length) return null;\n  return { traitUnion: m.join('-'), colle: m.join(''), point: m.join('.'),\n           premier: m[0], dernier: m[m.length - 1] };\n}\nconst STY   = ['traitUnion', 'colle', 'point', 'premier', 'dernier'];\nconst SEP   = ['', '.', '-', '_'];\nconst COUPE = [0, 1, 2, 3, 4];\nconst ORDRE = ['pn', 'np', 'p', 'n'];\n\nfunction rendre(r, sp, sn) {\n  const a = sp[r.sp], b = sn[r.sn];\n  if (!a || !b) return null;\n  const ca = r.cp ? a.slice(0, r.cp) : a;\n  const cb = r.cn ? b.slice(0, r.cn) : b;\n  if (r.ordre === 'p') return ca;\n  if (r.ordre === 'n') return cb;\n  return r.ordre === 'pn' ? ca + r.sep + cb : cb + r.sep + ca;\n}\nfunction cle(r) { return [r.ordre, r.cp, r.cn, r.sep, r.sp, r.sn].join('|'); }\nfunction depuisCle(k) {\n  const c = k.split('|');\n  return { ordre: c[0], cp: +c[1], cn: +c[2], sep: c[3], sp: c[4], sn: c[5] };\n}\nfunction recettes(mail, pre, nom) {\n  const sp = styles(pre), sn = styles(nom);\n  const set = new Set();\n  if (!sp || !sn) return set;\n  const loc = String(mail).split('@')[0].replace(/\\d+$/, '');\n  if (!loc) return set;\n  for (const ordre of ORDRE) for (const cp of COUPE) for (const cn of COUPE)\n    for (const sep of SEP) for (const a of STY) for (const b of STY) {\n      const r = { ordre, cp, cn, sep, sp: a, sn: b };\n      if (rendre(r, sp, sn) === loc) set.add(cle(r));\n    }\n  return set;\n}\n\nlet triples = entree._triples || [];\nlet source  = entree._motif_source || 'aucun';\n\n// --- Reponse IA : des NOMS corriges, jamais une adresse ni une regle ---\n// L'IA a seulement pu dire \"cette adresse encode en realite tel prenom / tel nom\". On relance\n// la recherche parametrique avec ces noms et on ne garde le resultat que s'il reproduit\n// TOUTES les sondes. Une hallucination ne peut donc pas produire d'adresse : elle echoue au\n// controle et on repart au repli payant.\nif (!triples.length && entree._skipIA === false) {\n  source = 'aucun';\n  try {\n    const env = JSON.parse(entree.sortie || '{}');\n    const txt = String(env.result || '');\n    const d = txt.indexOf('{');\n    const f = txt.lastIndexOf('}');\n    if (d >= 0 && f > d) {\n      const o = JSON.parse(txt.slice(d, f + 1));\n      const corr = {};\n      for (const c of (o.corrections || [])) {\n        if (c && c.adresse && c.prenom && c.nom) {\n          corr[String(c.adresse).toLowerCase()] = { prenom: c.prenom, nom: c.nom };\n        }\n      }\n      if (Object.keys(corr).length) {\n        const matches = entree.matches || [];\n        const meta    = entree.meta || [];\n        let inter = null;\n        for (let i = 0; i < Math.max(matches.length, meta.length); i++) {\n          const m = matches[i] || {};\n          const p = meta[i] || {};\n          const brut = String(m.email || '');\n          if (!brut || brut.indexOf('email_not_unlocked') !== -1) continue;\n          const mail = brut.toLowerCase();\n          const fix = corr[mail];\n          const pre = fix ? fix.prenom : (m.first_name || p.first_name || '');\n          const nm  = fix ? fix.nom    : (m.last_name  || p.last_name  || '');\n          const t = recettes(mail, pre, nm);\n          inter = (inter === null) ? t : new Set([...inter].filter(x => t.has(x)));\n        }\n        if (inter && inter.size) { triples = [...inter]; source = 'ia_noms'; }\n      }\n    }\n  } catch (e) { /* 429, sortie tronquee, JSON casse : on reste en 'aucun' */ }\n}\n\nconst deduits   = [];\nconst sansMotif = [];\n\nif (triples.length && domaine) {\n  for (const p of aDeduire) {\n    const sp = styles(p.first_name);\n    const sn = styles(p.last_name);\n    if (!sp || !sn) { sansMotif.push(p); continue; }\n    // Plusieurs recettes peuvent reproduire les sondes : sur des noms simples, \"colle\" et\n    // \"premier\" donnent le meme resultat, l'ambiguite est invisible. Elle se revele sur un nom\n    // COMPOSE. On n'ecrit donc l'adresse que si TOUTES les recettes convergent sur CE contact.\n    const rendus = new Set();\n    for (const k of triples) {\n      const v = rendre(depuisCle(k), sp, sn);\n      if (v) rendus.add(v);\n    }\n    if (rendus.size === 1) {\n      deduits.push(Object.assign({}, p, { email: Array.from(rendus)[0] + '@' + domaine }));\n    } else {\n      sansMotif.push(p);\n    }\n  }\n} else {\n  for (const p of aDeduire) sansMotif.push(p);\n}\n\n// Repli : ce qu'on n'a pas su deduire, on le repaie en credits Apollo plutot que de le perdre.\nconst REPLI = ($('Config').first().json.MOTIF_REPLI_CREDITS ?? true) === true;\nconst besoinReste = REPLI && sansMotif.length > 0;\n\n// Sans repli, ces contacts partent quand meme dans l'Annuaire, avec leur LinkedIn mais sans email.\nconst metaSansEmail = besoinReste\n  ? (entree.metaSansEmail || [])\n  : (entree.metaSansEmail || []).concat(sansMotif);\n\nreturn [{ json: Object.assign({}, entree, {\n  _motif_source: source,\n  _motif: triples.length ? triples[0] : '',\n  _recettes_retenues: triples.length,\n  deduits: deduits,\n  _nb_deduits: deduits.length,\n  _sans_motif: sansMotif.map(p => p.name),\n  metaSansEmail: metaSansEmail,\n  aDeduire: sansMotif,\n  detailsReste: sansMotif.map(p => ({ id: p.id })),\n  _besoin_reste: besoinReste,\n})}];"
+      },
+      "id": "1a5e4c1b-fc8d-4fd5-92e4-07b77a2dee5c",
+      "name": "Parser motif",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "mi1",
+              "leftValue": "={{ $json._besoin_reste }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "172833ae-e1c2-423a-91a9-7fc4e6690b21",
+      "name": "Motif introuvable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5072,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/bulk_match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Config').first().json.APOLLO_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ details: $json.detailsReste }) }}",
+        "options": {}
+      },
+      "id": "a8ae98cb-327d-4eee-9262-6b61719b56b5",
+      "name": "Apollo - Reste",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5296,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Repli assume : le gabarit n'a pas pu etre etabli, on a donc REPAYE des credits Apollo pour\n// les contacts concernes. On refusionne ces enrichissements avec ceux de la sonde pour que le\n// mappeur ne voie qu'une seule liste, identique a celle du mode complet.\nconst parser = $('Parser motif').first().json;\nconst rep = $input.first().json;\nconst src = rep.body ?? rep;\n\nreturn [{ json: Object.assign({}, parser, {\n  matches: (parser.matches || []).concat(src.matches || []),\n  meta:    (parser.meta || []).concat(parser.aDeduire || []),\n  deduits: parser.deduits || [],\n  _credits_replies: (src.matches || []).length,\n  _motif_source: (parser._motif_source || 'aucun') + '+repli_credits',\n})}];"
+      },
+      "id": "5465e5eb-df5a-4bf5-b6ed-c0aa55080fd7",
+      "name": "Fusion reste",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5520,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// BASCULE \"quelques sondes au lieu de 10 enrichissements\".\n// Apollo facture 1 credit par email revele. Mais la recherche de personnes est GRATUITE et\n// annonce deja qu'un email valide existe (email_status) : seule la chaine est masquee. On en\n// achete donc quelques-unes, on en deduit le gabarit maison, et on reconstruit les autres.\n//\n// POURQUOI 3 SONDES ET PAS 1 : releve reel sur Air France, une seule entreprise melange\n//   warrhalimata@   huguette.pallen@   p.garcia@   bmartins@   thlaousse@\n// soit au moins 4 gabarits. Avec une sonde unique on generaliserait le gabarit de cette sonde a\n// tout le monde et on ecrirait des adresses fausses (6 sur 6 lors du test). Avec 3 sondes on ne\n// retient qu'un gabarit qui les reproduit TOUTES : sur une boite heterogene l'intersection est\n// vide, donc on ne deduit rien et on repaie les credits.\nconst cfg = $('Config').first().json;\nconst MODE_MOTIF = cfg.MODE_MOTIF ?? true;   // MODE_MOTIF: false dans Config = enrichissement complet\nconst NB_SONDES  = Math.max(1, cfg.NB_SONDES ?? 3);\nconst MAX_ETRANGER = Math.max(1, cfg.MAX_CONTACTS_ETRANGER ?? 5);\n\n// --- Repli etranger ? ---\n// Les filtres de localisation signalent quand une societe n'a AUCUN contact francais ni sans\n// pays, et qu'ils ont donc bascule sur des etrangers. Dans ce cas on plafonne a 5 contacts, et\n// on le fait ICI, AVANT l'enrichissement : plafonner a l'ecriture ferait payer des credits pour\n// des lignes jetees.\nlet replriEtranger = false;\nfunction voirRepli(nom) {\n  for (let r = 0; r < 50; r++) {\n    let items;\n    try { items = $(nom).all(0, r); } catch (e) { break; }\n    if (!items || !items.length) break;\n    for (const it of items) if (it.json && it.json._fallback_hors_france === true) replriEtranger = true;\n  }\n}\ntry { voirRepli('Apollo - Personnes'); } catch (e) {}\ntry { voirRepli('Filtre localisation ciblees'); } catch (e) {}\n\n// \"Classer prospects\" ne conserve pas first_name / last_name, or le gabarit se detecte sur le\n// prenom ET le nom separes. On les recupere dans la reponse BRUTE de la recherche de personnes,\n// qui n'a rien coute, indexee par id Apollo.\nconst nomsParId = new Map();\nfunction avaler(nom) {\n  for (let r = 0; r < 50; r++) {\n    let items;\n    try { items = $(nom).all(0, r); } catch (e) { break; }\n    if (!items || !items.length) break;\n    for (const it of items) {\n      const src = (it.json && it.json.body) ? it.json.body : (it.json || {});\n      for (const p of (src.people || [])) {\n        if (p && p.id) nomsParId.set(p.id, {\n          first_name: p.first_name || '', last_name: p.last_name || '',\n        });\n      }\n    }\n  }\n}\ntry { avaler('Apollo - Personnes'); } catch (e) { /* noeud non execute */ }\ntry { avaler('Apollo - Personnes ciblees'); } catch (e) { /* branche non empruntee */ }\n\nfunction garnir(p) {\n  const n = nomsParId.get(p.id);\n  if (n && n.first_name && n.last_name) return Object.assign({}, p, n);\n  // Repli : on coupe le nom complet au premier espace. Imparfait sur les prenoms composes,\n  // d'ou la preference pour la reponse Apollo quand elle est disponible.\n  const t = String(p.name || '').trim().split(/\\s+/);\n  return Object.assign({}, p, {\n    first_name: (n && n.first_name) || t[0] || '',\n    last_name:  (n && n.last_name)  || t.slice(1).join(' '),\n  });\n}\n\nreturn $input.all().map(item => {\n  const lot = item.json || {};\n  let meta = (lot.meta || []).map(garnir);\n  let sans = lot.metaSansEmail || [];\n\n  // Plafond du repli etranger : 5 contacts au total, emails d'abord.\n  if (replriEtranger) {\n    meta = meta.slice(0, MAX_ETRANGER);\n    sans = sans.slice(0, Math.max(0, MAX_ETRANGER - meta.length));\n  }\n\n  const details = replriEtranger ? meta.map(p => ({ id: p.id })) : (lot.details || []);\n\n  const complet = Object.assign({}, lot, {\n    meta: meta, metaSansEmail: sans, details: details,\n    aDeduire: [], detailsReste: [], _mode: 'complet', _economie_credits: 0,\n    _fallback_hors_france: replriEtranger,\n    _nb_a_ecrire: (meta.length + sans.length) || lot._nb_a_ecrire,\n  });\n\n  if (!MODE_MOTIF || details.length <= NB_SONDES) return { json: complet };\n\n  // Une sonde doit avoir un prenom ET un nom exploitables : sans eux, aucun gabarit n'est\n  // detectable et on aurait paye un credit pour rien.\n  const idx = [];\n  meta.forEach((p, k) => { if (idx.length < NB_SONDES && p.first_name && p.last_name) idx.push(k); });\n  if (!idx.length) return { json: complet };\n\n  const sondes = idx.map(k => meta[k]);\n  const reste  = meta.filter((_, k) => idx.indexOf(k) === -1);\n  if (!reste.length) return { json: complet };\n\n  return { json: Object.assign({}, lot, {\n    _mode: 'motif',\n    _nb_sondes: sondes.length,\n    _fallback_hors_france: replriEtranger,\n    details: sondes.map(p => ({ id: p.id })),\n    meta: sondes,\n    metaSansEmail: sans,\n    aDeduire: reste,\n    detailsReste: reste.map(p => ({ id: p.id })),\n    _economie_credits: reste.length,\n    _nb_a_ecrire: meta.length + sans.length,\n  })};\n});"
+      },
+      "id": "b38a74d8-921c-444f-baf3-4bd183e3f39d",
+      "name": "Sonde motif",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3728,
+        -304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ni1",
+              "leftValue": "={{ $json._match === false && $json._essai === 1 && $('Config').first().json.NOM_IA !== false }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "460f6c72-9059-4e3c-ab3b-46fa5457c752",
+      "name": "Nom introuvable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "nx1",
+              "leftValue": "={{ $json._nom_ia_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dd94c2ff-40e4-42d9-a67c-dbf4634abc6b",
+      "name": "Nom IA exploitable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// RATTRAPAGE SUR ECHEC UNIQUEMENT.\n// Les feuilles portent la raison sociale du registre, Apollo indexe les noms COMMERCIAUX.\n// Le nettoyage deterministe (retrait de la forme juridique, dans \"Preparer societes\") suffit\n// dans la plupart des cas. Ce noeud ne tourne que sur ce qu'il n'a pas su rattraper : appeler\n// l'IA sur les 972 societes couterait environ 4 h 30 de CLI, pour l'essentiel inutilement.\nconst soc = $input.first().json;\n\nconst prompt = [\n  \"Tu identifies le NOM COMMERCIAL d'une entreprise francaise pour une recherche en base B2B.\",\n  '',\n  'Raison sociale au registre : ' + (soc._raison || soc._nom_brut || ''),\n  soc._enseigne ? 'Enseigne declaree : ' + soc._enseigne : '',\n  soc._naf      ? 'Code NAF : ' + soc._naf : '',\n  soc._commune  ? 'Commune : ' + soc._commune : '',\n  soc._classe   ? 'Secteur : ' + soc._classe : '',\n  '',\n  'La recherche sur \"' + (soc._nom_recherche || '') + '\" n a donne aucun resultat exploitable.',\n  soc._candidats ? 'Resultats approchants renvoyes : ' + soc._candidats\n                 : 'Aucun resultat approchant renvoye.',\n  '',\n  \"Donne le nom sous lequel cette entreprise est connue commercialement (marque ou nom d'usage),\",\n  'sans forme juridique, sans nom de departement ni de filiale.',\n  \"N'invente rien : si tu ne connais pas cette entreprise, reponds AUCUN. Un nom invente ferait\",\n  \"rattacher les contacts d'une AUTRE societe, ce qui est pire que pas de resultat du tout.\",\n  '',\n  'Reponds UNIQUEMENT par un objet JSON : {\"nom\":\"<nom commercial>\"} ou {\"nom\":\"AUCUN\"}.'\n].filter(Boolean).join('\\n');\n\nreturn [{ json: Object.assign({}, soc, { prompt: prompt }) }];"
+      },
+      "id": "5b80494d-a3e5-4473-8332-be71708ca191",
+      "name": "Prompt nom",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Meme mecanique que les autres appels IA : execFileSync sur le wrapper /usr/local/bin/claude-run,\n// arguments en TABLEAU (pas de shell, donc aucune injection), timeout sous les 300 s du runner.\n// Le jeton est lu par le wrapper dans le process fils : jamais visible ici.\nconst mod = require('child_process');\nconst entree = $input.first().json;\n\nconst cfg = $('Config').first().json;\nconst modele = cfg.MODELE_IA || 'sonnet';\nconst delai  = cfg.TIMEOUT_IA_MS || 270000;\nconst debut  = Date.now();\n\nlet sortie = '';\nlet sortieErreur = null;\nlet erreur = null;\nlet codeSortie = 0;\n\ntry {\n  sortie = String(mod.execFileSync(\n    'claude-run',\n    ['-p', entree.prompt, '--output-format', 'json', '--model', modele],\n    { encoding: 'utf8', timeout: delai, maxBuffer: 33554432, cwd: '/tmp' }\n  ));\n} catch (err) {\n  // Quota epuise (429), jeton invalide, timeout : on n'echoue PAS le run. Le parseur en aval\n  // constatera l'absence de nom, et la societe restera simplement en NO_MATCH.\n  codeSortie = (err && typeof err.status === 'number') ? err.status : -1;\n  erreur = String((err && err.message) || err).slice(0, 400);\n  sortie = (err && err.stdout) ? String(err.stdout) : '';\n  sortieErreur = (err && err.stderr) ? String(err.stderr).slice(0, 3000) : null;\n}\n\nreturn [{ json: Object.assign({}, entree, {\n  sortie: sortie,\n  sortieErreur: sortieErreur,\n  erreur: erreur,\n  codeSortie: codeSortie,\n  dureeAppelMs: Date.now() - debut\n})}];"
+      },
+      "id": "eb0886e7-dbc1-4e42-94c1-4decbcf460d1",
+      "name": "Nom IA (Claude CLI)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Depouille la reponse IA (double enveloppe : enveloppe CLI, puis JSON metier dans .result).\nconst e = $input.first().json;\n\nlet nom = '';\ntry {\n  const env = JSON.parse(e.sortie || '{}');\n  const txt = String(env.result || '');\n  const d = txt.indexOf('{');\n  const f = txt.lastIndexOf('}');\n  if (d >= 0 && f > d) {\n    const o = JSON.parse(txt.slice(d, f + 1));\n    if (o.nom && String(o.nom).trim().toUpperCase() !== 'AUCUN') nom = String(o.nom).trim();\n  }\n} catch (err) { /* 429, sortie vide ou tronquee : pas de nom, on n'insiste pas */ }\n\n// GARDE-FOU COUT : ne relancer Apollo que si le nom est REELLEMENT different. Sinon on paierait\n// un 2e credit pour rejouer exactement la requete qui vient d'echouer.\nconst cle = s => String(s || '').toUpperCase().normalize('NFD')\n  .replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');\nconst utile = !!nom && cle(nom) !== cle(e._nom_recherche);\n\nreturn [{ json: Object.assign({}, e, {\n  _nom_ia: nom,\n  _nom_ia_ok: utile,\n  _nom_ia_erreur: e.erreur || null,\n  _nom_recherche: utile ? nom : e._nom_recherche\n})}];"
+      },
+      "id": "85cea1aa-12ec-4710-ab94-1a532d4f1f00",
+      "name": "Parser nom",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FRANCE D'ABORD, etranger en DERNIER RECOURS.\n// On garde les contacts localises en France + ceux SANS pays renseigne. Si cela ne donne RIEN,\n// on bascule sur les etrangers plutot que de rendre la societe vide : ils seront plafonnes a 5\n// et signales \"Contact FR non trouve\" dans l'Annuaire.\n//\n// !! POURQUOI CE NOEUD S'APPELLE \"Apollo - Personnes\" alors que l'appel HTTP s'appelle\n// \"Apollo - Personnes brut\" : \"Classer prospects\" et \"Sonde motif\" vont chercher les personnes\n// par $('Apollo - Personnes') en plus de leur entree normale. Ils COURT-CIRCUITAIENT donc le\n// filtre (mesure du 07/08 : British Airways, 4 contacts gardes mais 104 vus au classement).\n// En portant ce nom, le filtre s'intercale sans toucher aux 300 lignes de \"Classer prospects\".\n// Ne pas renommer sans corriger ces deux noeuds.\nconst PAYS = ($('Config').first().json.PAYS || ['France'])\n  .map(p => String(p).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));\nconst MAX_REPLI = $('Config').first().json.MAX_REPLI_ETRANGER ?? 25;\n\nreturn $input.all().map(item => {\n  const src = (item.json && item.json.body) ? item.json.body : (item.json || {});\n  const gens = src.people || [];\n  const fr = [], inconnus = [], etrangers = [];\n\n  for (const p of gens) {\n    const loc = [p.country, p.state, p.city, p.present_raw_address]\n      .filter(Boolean).join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\n    if (!loc.trim()) { inconnus.push(p); continue; }\n    if (PAYS.some(x => loc.indexOf(x) !== -1)) { fr.push(p); continue; }\n    etrangers.push(p);\n  }\n\n  const retenus = fr.concat(inconnus);\n  const repli = retenus.length === 0 && etrangers.length > 0;\n  const people = repli ? etrangers.slice(0, MAX_REPLI) : retenus;\n\n  return { json: Object.assign({}, src, {\n    people: people,\n    _loc_vus: gens.length,\n    _loc_gardes: people.length,\n    _loc_france: fr.length,\n    _loc_sans_localisation: inconnus.length,\n    _loc_hors_france: etrangers.length,\n    _fallback_hors_france: repli,\n  })};\n});"
+      },
+      "id": "1dbbe035-2a1c-43fd-b14d-89471197874b",
+      "name": "Apollo - Personnes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Meme regle que \"Apollo - Personnes\" (France + pays inconnu, etrangers en dernier recours),\n// appliquee aux 12 requetes ciblees.\n//\n// Rappel : chaque bloc de fonctions est joue deux fois, avec et sans person_locations. La passe\n// SANS pays sert a rattraper les profils dont le pays n'est pas renseigne : on ne garde d'eux que\n// ceux effectivement sans pays, jamais un contact affiche a l'etranger.\nconst PAYS = ($('Config').first().json.PAYS || ['France'])\n  .map(p => String(p).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));\nconst MAX_REPLI = $('Config').first().json.MAX_REPLI_ETRANGER ?? 25;\n\nreturn $input.all().map(item => {\n  const src = (item.json && item.json.body) ? item.json.body : (item.json || {});\n  const gens = src.people || [];\n  const fr = [], inconnus = [], etrangers = [];\n\n  for (const p of gens) {\n    const loc = [p.country, p.state, p.city, p.present_raw_address]\n      .filter(Boolean).join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\n    if (!loc.trim()) { inconnus.push(p); continue; }\n    if (PAYS.some(x => loc.indexOf(x) !== -1)) { fr.push(p); continue; }\n    etrangers.push(p);\n  }\n\n  const retenus = fr.concat(inconnus);\n  const repli = retenus.length === 0 && etrangers.length > 0;\n  const people = repli ? etrangers.slice(0, MAX_REPLI) : retenus;\n\n  return { json: Object.assign({}, src, {\n    people: people,\n    _loc_vus: gens.length,\n    _loc_gardes: people.length,\n    _loc_france: fr.length,\n    _loc_sans_localisation: inconnus.length,\n    _loc_hors_france: etrangers.length,\n    _fallback_hors_france: repli,\n  })};\n});"
+      },
+      "id": "0c10210b-8f62-46bc-882e-09493c3bf424",
+      "name": "Filtre localisation ciblees",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2032,
+        -64
+      ]
+    }
+  ],
+  "connections": {
+    "Feuilles sources": {
+      "main": [
+        [
+          {
+            "node": "Boucle feuilles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Boucle feuilles": {
+      "main": [
+        [
+          {
+            "node": "Filtre societes a traiter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lire feuille source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Declenchement manuel": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag feuille": {
+      "main": [
+        [
+          {
+            "node": "Boucle feuilles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer societes": {
+      "main": [
+        [
+          {
+            "node": "Boucle societes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Boucle societes": {
+      "main": [
+        [
+          {
+            "node": "Resume run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apollo - Societe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo - Societe": {
+      "main": [
+        [
+          {
+            "node": "Choisir societe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trop de contacts": {
+      "main": [
+        [
+          {
+            "node": "Requetes ciblees",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classer prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requetes ciblees": {
+      "main": [
+        [
+          {
+            "node": "Apollo - Personnes ciblees",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classer prospects": {
+      "main": [
+        [
+          {
+            "node": "Des prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Des prospects": {
+      "main": [
+        [
+          {
+            "node": "Sonde motif",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marquer societe traitee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause": {
+      "main": [
+        [
+          {
+            "node": "Boucle societes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Lister feuilles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lister feuilles": {
+      "main": [
+        [
+          {
+            "node": "Cible Annuaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cible Annuaire": {
+      "main": [
+        [
+          {
+            "node": "Lire Annuaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire Annuaire": {
+      "main": [
+        [
+          {
+            "node": "Feuilles sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire feuille source": {
+      "main": [
+        [
+          {
+            "node": "Tag feuille",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapper Annuaire": {
+      "main": [
+        [
+          {
+            "node": "Ecrire Annuaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire Annuaire": {
+      "main": [
+        [
+          {
+            "node": "Marquer societe traitee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marquer societe traitee": {
+      "main": [
+        [
+          {
+            "node": "Pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtre societes a traiter": {
+      "main": [
+        [
+          {
+            "node": "Preparer societes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt qualification": {
+      "main": [
+        [
+          {
+            "node": "Qualification IA (Claude CLI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualification IA (Claude CLI)": {
+      "main": [
+        [
+          {
+            "node": "Parser qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser qualification": {
+      "main": [
+        [
+          {
+            "node": "IA OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA OK": {
+      "main": [
+        [
+          {
+            "node": "Apollo - Personnes brut",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marquer societe traitee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A enrichir": {
+      "main": [
+        [
+          {
+            "node": "Apollo - Enrichir",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mapper Annuaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo - Enrichir": {
+      "main": [
+        [
+          {
+            "node": "Prompt motif",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt motif": {
+      "main": [
+        [
+          {
+            "node": "Motif IA (Claude CLI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Motif IA (Claude CLI)": {
+      "main": [
+        [
+          {
+            "node": "Parser motif",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser motif": {
+      "main": [
+        [
+          {
+            "node": "Motif introuvable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Motif introuvable": {
+      "main": [
+        [
+          {
+            "node": "Apollo - Reste",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mapper Annuaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo - Reste": {
+      "main": [
+        [
+          {
+            "node": "Fusion reste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fusion reste": {
+      "main": [
+        [
+          {
+            "node": "Mapper Annuaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sonde motif": {
+      "main": [
+        [
+          {
+            "node": "A enrichir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choisir societe": {
+      "main": [
+        [
+          {
+            "node": "Nom introuvable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nom introuvable": {
+      "main": [
+        [
+          {
+            "node": "Prompt nom",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prompt qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt nom": {
+      "main": [
+        [
+          {
+            "node": "Nom IA (Claude CLI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nom IA (Claude CLI)": {
+      "main": [
+        [
+          {
+            "node": "Parser nom",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser nom": {
+      "main": [
+        [
+          {
+            "node": "Nom IA exploitable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nom IA exploitable": {
+      "main": [
+        [
+          {
+            "node": "Apollo - Societe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prompt qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo - Personnes ciblees": {
+      "main": [
+        [
+          {
+            "node": "Filtre localisation ciblees",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtre localisation ciblees": {
+      "main": [
+        [
+          {
+            "node": "Classer prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo - Personnes brut": {
+      "main": [
+        [
+          {
+            "node": "Apollo - Personnes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo - Personnes": {
+      "main": [
+        [
+          {
+            "node": "Trop de contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

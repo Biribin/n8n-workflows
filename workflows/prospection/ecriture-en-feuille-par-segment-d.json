@@ -1,0 +1,258 @@
+{
+  "name": "Pipeline - Ecriture prospects aero par claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.contacts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -512
+      ],
+      "id": "aa3d588b-d0b8-4484-b76b-448a934db475",
+      "name": "Split Out contacts"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "05d65ba5-cce0-48f9-afe9-54ad9dcfc8cb",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -256,
+        -512
+      ],
+      "id": "6105e329-d737-4a56-bc8f-61efcb5134de",
+      "name": "Webhook1",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.id_prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.entreprise }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.domaine }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json.secteur }}"
+            },
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.decideur }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.poste }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.linkedin }}"
+            },
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.telephone }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $json.source }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        -512
+      ],
+      "id": "6379a0ff-94b1-4049-8eb1-73135b81baa4",
+      "name": "Ecrire la feuille acme",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.ID_Prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.Entreprise }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.Domaine }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json[\"Secteur  \"] }}"
+            },
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json[\"Décideur\"] }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.Post }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.Email }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.Linledin }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $json.Source }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.Score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        -512
+      ],
+      "id": "19a3392c-253f-43e6-ab6e-16a3b23d0825",
+      "name": "Ecrire la feuille air",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Split Out contacts": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille acme",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Split Out contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille acme": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille air",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

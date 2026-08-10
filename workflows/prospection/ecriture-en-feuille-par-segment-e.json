@@ -1,0 +1,160 @@
+{
+  "name": "Pipeline - Ecriture transport-logistique (ACME Aviation) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ecriture-transport",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -240,
+        -160
+      ],
+      "id": "cc1cd793-a60b-475f-92b6-7eb4f388d2d5",
+      "name": "Webhook",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.contacts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        -160
+      ],
+      "id": "25276e3a-11ae-4fbd-8e0a-550d5bc60d42",
+      "name": "Split Out contacts"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.id_prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.entreprise }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.domaine }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json.secteur }}"
+            },
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.decideur }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.poste }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.linkedin }}"
+            },
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.telephone }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $json.source }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        -160
+      ],
+      "id": "5f3e5a97-4585-4485-918d-99f47ce4b1f7",
+      "name": "Ecrire Air transport",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Out contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out contacts": {
+      "main": [
+        [
+          {
+            "node": "Ecrire Air transport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

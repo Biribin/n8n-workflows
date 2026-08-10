@@ -1,0 +1,2168 @@
+{
+  "name": "scrapper aéroportuaire google jobs",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -944,
+        688
+      ],
+      "id": "f2e7f8ab-9282-4641-8c79-5cc3468d4646",
+      "name": "Loop Over Keywords1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5505f622-2525-4ecb-8e7b-644757f926fd",
+              "leftValue": "={{ $json.search_metadata.status }}",
+              "rightValue": "Success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1168,
+        688
+      ],
+      "id": "a2cf817b-aeaf-4d92-acf2-52c156134aaa",
+      "name": "If7"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst jobs = response.jobs_results || [];\n\n// Agrégateurs : utilisables mais en dernier recours.\n// On préfère le site carrière / ATS de l'entreprise (aide aussi Claude à trouver le domaine).\nconst AGREGATEURS = [\n  'indeed', 'linkedin', 'glassdoor', 'jooble', 'talent.com', 'hellowork',\n  'monster', 'ziprecruiter', 'neuvoo', 'jobijoba', 'optioncarriere',\n  'meteojob', 'cadremploi', 'apec', 'france travail', 'pôle emploi',\n  'trovit', 'careerjet', 'adzuna', 'jobrapido', 'emploi.org'\n];\n\nfunction cleanUrl(u) {\n  if (!u) return '';\n  try {\n    const url = new URL(u);\n    // enlève le tracking google_jobs_apply\n    ['utm_campaign', 'utm_source', 'utm_medium', 'utm_content', 'utm_term', 'gh_src']\n      .forEach(p => url.searchParams.delete(p));\n    return url.toString();\n  } catch (e) {\n    return u;\n  }\n}\n\nfunction pickUrl(job) {\n  const opts = Array.isArray(job.apply_options) ? job.apply_options : [];\n  const valides = opts.filter(o => o && o.link);\n\n  if (valides.length) {\n    const estAgregateur = o =>\n      AGREGATEURS.some(a => String(o.title || '').toLowerCase().includes(a));\n\n    // 1er choix : lien direct employeur / ATS\n    const direct = valides.find(o => !estAgregateur(o));\n    if (direct) return cleanUrl(direct.link);\n\n    // 2e choix : premier agrégateur dispo\n    return cleanUrl(valides[0].link);\n  }\n\n  // 3e choix : lien de secours qui fonctionne TOUJOURS (recherche ciblée)\n  const q = [job.company_name, job.title].filter(Boolean).join(' ');\n  if (q) {\n    return 'https://www.google.com/search?q=' + encodeURIComponent(q) + '&gl=fr&hl=fr';\n  }\n  return '';\n}\n\nreturn jobs.map(job => ({\n  json: {\n    id: job.job_id || '',\n    intitule: job.title || '',\n    entreprise: job.company_name || '',\n    typeContrat: job.detected_extensions?.schedule_type || '',\n    codePostal: job.location || '',\n    lieu: job.location || '',\n    salaire: job.detected_extensions?.salary || '',\n    description: job.description || '',\n    experience: job.job_highlights?.find(h => h.title === 'Qualifications')?.items?.[0] || '',\n    nombrePostes: 1,\n    source: job.via || '',\n    romeLibelle: job.title || '',\n    dateCreation: job.detected_extensions?.posted_at || '',   // 👈 voir note plus bas\n    motsCles: job.extensions?.join(', ') || '',\n    url: pickUrl(job),\n    urlGoogle: job.share_link || '',   // conservé pour debug, pas écrit dans Excel\n    thumbnail: job.thumbnail || ''\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        736
+      ],
+      "id": "7c4bbc3a-1555-4340-8d87-e4d82a290f7e",
+      "name": "Code in JavaScript8",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -496,
+        544
+      ],
+      "id": "6e61c723-187a-404e-a9d6-0bfb95388a55",
+      "name": "Loop Over Items4"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -2288,
+        688
+      ],
+      "id": "b962cac6-02db-4b5d-bf34-bb4c90300602",
+      "name": "Lire Pipeline2",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 350000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -48,
+        368
+      ],
+      "id": "c1a08620-3c82-41d9-9b21-870387e1c0ea",
+      "name": "HTTP Request7",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "anthropicApi": {
+          "id": "A_RECONNECTER",
+          "name": "anthropicApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "047ac36c-f057-4318-bf66-370073cc74aa",
+              "leftValue": "={{ $json.pertinent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        848,
+        -112
+      ],
+      "id": "a7b42bf1-a749-4e72-8c41-a4abc5e00b62",
+      "name": "If10"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeDomain(url) {\n  if (!url) return \"\";\n  let d = String(url).toLowerCase().trim();\n  d = d.replace(/^https?:\\/\\//, \"\")\n       .replace(/^www\\./, \"\")\n       .split(/[\\/?#]/)[0]\n       .trim();\n  if (!d || !d.includes(\".\")) return \"\";\n  const generiques = [\"linkedin.com\", \"facebook.com\", \"pagesjaunes.fr\", \"societe.com\", \"indeed.com\", \"google.com\", \"hellowork.com\"];\n  if (generiques.some(g => d === g || d.endsWith(\".\" + g))) return \"\";\n  return d;\n}\n\n// --- Parsing de la réponse Claude ---\nconst content = $input.first().json.content;\nconst textBlocks = content.filter(c => c.type === 'text');\nconst allText = textBlocks.map(b => b.text).join(' ');\n\nconst cleaned = allText.replace(/```json/g, '').replace(/```/g, '');\nconst match = cleaned.match(/\\{[^{}]*\"pertinent\"[^{}]*\\}/);\n\nconst original = $('Loop Over Items4').last().json;\n\nlet result = { pertinent: false, raison: 'parse_error', secteur: 'NOT_FOUND', score: 0, classification: 'OUT' };\nif (match) {\n  try {\n    result = JSON.parse(match[0]);\n  } catch (e) {}\n}\n\n// Fallback : si tronqué mais classification visible dans le texte\nif (result.raison === 'parse_error') {\n  if (allText.includes('Classification → OUT') || allText.includes('classification\": \"OUT\"')) {\n    result = { pertinent: false, raison: 'ETT_concurrente', secteur: 'NOT_FOUND', score: 0, classification: 'OUT' };\n  }\n}\n\n// --- Vérification : domaine déjà dans le Pipeline ---\n// ⚠️ Le site web vient de la réponse Claude (result.site_web), pas de l'item original\nconst siteItem = normalizeDomain(\n  result.site_web || result.siteWeb || result.domaine ||\n  original.site_web || original.siteWeb || original.website || ''\n);\n\nif (siteItem) {\n  const pipelineRows = $('Lire Pipeline2').all();\n  for (const row of pipelineRows) {\n    const sitePipeline = normalizeDomain(row.json.Domaine || '');\n    if (sitePipeline && sitePipeline === siteItem) {\n      result = {\n        ...result,\n        pertinent: false,\n        raison: 'site_web_deja_existant',\n        classification: 'OUT',\n        score: 0\n      };\n      break;\n    }\n  }\n}\n\nreturn [{\n  json: {\n    ...original,\n    ...result,\n    _domaine: siteItem\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        368
+      ],
+      "id": "0d876043-c508-455f-acd9-b638d877bd21",
+      "name": "Code in JavaScript7"
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "table": {
+          "__rl": true,
+          "value": "{9ACAD687-8AC1-402A-9645-7AEF22E3B01F}",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Source",
+              "fieldValue": "={{ $('Loop Over Items4').last().json.urlOffre }}"
+            },
+            {
+              "column": "Company",
+              "fieldValue": "={{ $('Loop Over Items4').last().json.entreprise }}"
+            },
+            {
+              "column": "Position",
+              "fieldValue": "={{ $('Loop Over Items4').last().json.intitule }}"
+            },
+            {
+              "column": "Raison",
+              "fieldValue": "={{ $json.raison }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        128
+      ],
+      "id": "db425cae-0c0f-4da5-91de-317f053b8e1e",
+      "name": "Ecrire la feuille rejeté2",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1520,
+        -272
+      ],
+      "id": "55343aeb-4390-4397-bf1e-bddb0d964590",
+      "name": "Merge7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/match",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "reveal_personal_emails",
+              "value": "true"
+            },
+            {
+              "name": "reveal_phone_number",
+              "value": "true"
+            },
+            {
+              "name": "webhook_url",
+              "value": "n8n.exemple.internal/webhook/00000000-0000-0000-0000-000000000000"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.person_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f4e2f891-1d02-41aa-813d-b0b9f74f5a53",
+      "name": "Get Email from Apollo2",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        176,
+        -416
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "batchSize": "=1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        -352
+      ],
+      "id": "40ee629a-3aa4-43e1-8d30-a1dce09c037d",
+      "name": "Loop Over Items5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json;\nconst people = item.people || [];\nconst score = item.score || '';\nconst secteur = item.secteur || '';\nconst domaine = $('Code in JavaScript7').last().json.site_web || item.domaine_extrait || item.domaine || '';\nconst classification = item.classification || '';\nconst entreprise = $('Loop Over Items4').last().json.entreprise || item.entreprise || '';\nconst urlOffre = $('Loop Over Items4').last().json.urlOffre || item.urlOffre || '';\n\nif (people.length === 0) {\n  return [{\n    json: {\n      person_id: null,\n      first_name: null,\n      last_name: null,\n      title: null,\n      linkedin_url: '',\n      has_email: false,\n      company: '',\n      score: score,\n      secteur: secteur,\n      domaine: domaine,\n      entreprise: entreprise,\n      classification: classification,\n      urlOffre: urlOffre,\n      _no_leads: true\n    }\n  }];\n}\n$input.first().json.entreprise\nreturn people.map(person => ({\n  json: {\n    person_id: person.id,\n    first_name: person.first_name,\n    last_name: person.last_name_obfuscated || person.last_name,\n    title: person.title,\n    linkedin_url: person.linkedin_url || '',\n    has_email: person.has_email,\n    company: person.organization?.name || '',   // 👈 entreprise actuelle du contact\n    score: score,\n    secteur: secteur,\n    domaine: domaine,\n    entreprise: entreprise,\n    classification: classification,\n    urlOffre: urlOffre\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        208
+      ],
+      "id": "14d18f3b-94af-4c35-bc70-76c7b0e9f160",
+      "name": "Code in JavaScript9",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        848,
+        -352
+      ],
+      "id": "3dbce284-c6bb-4618-a286-1a03e292e835",
+      "name": "Wait6",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                3
+              ],
+              "triggerAtHour": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2512,
+        688
+      ],
+      "id": "620b4fb0-d182-435c-94f5-90e81596e8d9",
+      "name": "Schedule Trigger2"
+    },
+    {
+      "parameters": {
+        "amount": 50
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        128
+      ],
+      "id": "73858f40-47b1-4a34-8c47-5d8a88815f20",
+      "name": "Wait8",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json;\nconst entreprise = item.entreprise || item.company_name || '';\nconst lieu = item.lieu || item.location || item.job_location || '';\nconst poste = item.intitule || item.job_title || '';\nconst contrat = item.typeContrat || item.job_type || 'non précisé';\nconst description = (item.description || item.description_text || '').substring(0, 1500);\nconst romeCode = item.romeCode || 'N/A';\nconst urlOffre = item.urlOffre || 'N/A';\nconst systemPrompt = `Tu es un classificateur JSON pour qualification B2B aéroportuaire pour acme Intérim, agence d'intérim spécialisée dans l'aéroportuaire (CDG/Orly/Le Bourget).\nOn cherche des CLIENTS POTENTIELS = entreprises terrain aéro qui pourraient avoir besoin d'intérimaires.\nRÈGLE ABSOLUE : Ta réponse est UNIQUEMENT un objet JSON valide.\n- Commence par { et finit par }\n- AUCUN texte avant ou après, AUCUN markdown, AUCUNE explication\nSTRATÉGIE DE RECHERCHE (1 à 3 web_search maximum) :\n1. \"<entreprise> <lieu>\" pour identifier l'activité principale\n2. \"<entreprise> site officiel\" si le domaine n'est pas évident\n3. \"<entreprise> maison mère\" uniquement si filiale suspectée\nPrivilégie le site officiel et les offres d'emploi récentes. Méfie-toi des fiches annuaires (societe.com, pappers, verif.com) : elles listent les ANCIENS actionnaires — ne retourne jamais le domaine d'un ex-propriétaire.`;\nconst userPrompt = `OFFRE À ANALYSER :\n- Entreprise : ${entreprise}\n- Lieu : ${lieu}\n- Poste : ${poste}\n- Contrat : ${contrat}\n- Code ROME : ${romeCode}\n- URL offre : ${urlOffre}\n- Description : ${description}\n---\n⚠️ ÉTAPE 1 — VÉRIFICATION ETT (PRIORITÉ ABSOLUE)\nVérifie si l'entreprise qui PUBLIE l'offre est une ETT/agence d'intérim/cabinet de recrutement/franchise d'intérim.\nSi OUI → passe quand même à l'ÉTAPE 2 pour trouver le site_web, puis retourne {\"pertinent\":false,\"raison\":\"ETT_concurrente\",...} avec le site_web trouvé. Ne fais PAS les étapes 3 et 4.\nMême si le poste est aéroportuaire, même si le client final est une handling company.\nETT à rejeter systématiquement :\nTemporis, Adecco, Manpower, Randstad, CRIT, Synergie, Supplay, Proman, Actual, RAS Intérim, Start People, Groupe LIP, DLSI, Triangle, Partnaire, Samsic Emploi, Spring, Kelly Services, PageGroup, Page Personnel, Michael Page, Hays, Expectra, Ergalis, Domino RH, Adequat, Interaction, GI Group, Staffmatch, Bruce, Iziwork, Akkodis, Artus Intérim, CAMO Emploi, Menway, Groupe Actual, Talents Handicap, Vitalis Médical, Aquila RH, Lynx RH, Mistertemp, Alphéa Conseil, Fed Group, Robert Half\n⚠️ NE PAS CONFONDRE ETT ET CLIENT AÉRO :\nUne entreprise de handling/sûreté/fret/escale qui RECRUTE en intérim N'EST PAS une ETT, c'est un client potentiel.\nLa question : quel est le MÉTIER PRINCIPAL ? Terrain aéro → CORE. Placement de personnel → OUT.\nExemple : Aviapartner qui poste en intérim = CORE. Adecco qui poste un bagagiste = OUT.\n---\n⚠️ ÉTAPE 2 — RECHERCHE SITE WEB\nFORMAT site_web : domaine nu uniquement (sans https://, sans www., sans /)\n✅ Correct : seafrigo.com, swissport.com, newrest.eu, hubsafe.com\n❌ Incorrect : https://www.seafrigo.com, [www.seafrigo.com](https://www.seafrigo.com), seafrigo.com/\nPréfère le domaine de la maison mère ACTUELLE si l'entreprise est une filiale.\nDomaines connus filiales :\n- France Handling → wfs.aero (filiale WFS)\n- Alyzia → groupe3s.fr (filiale Groupe 3S)\n- RESTAURATION ROISSY / RESTAURATION ORLY → areas.com (ex-Elior, vendu en 2019 — PAS eliorgroup.com)\n- Seafrigo Group → seafrigo.com\n- Newrest → newrest.eu\n- Hubsafe → hubsafe.com\n- Swissport → swissport.com\nNe JAMAIS inventer un domaine.\nSi site web NON TROUVÉ → retourne {\"pertinent\":false,\"raison\":\"domaine_non_trouve\",\"secteur\":\"NOT_FOUND\",\"score\":0,\"classification\":\"OUT\",\"activite_entreprise\":\"résumé court\",\"site_web\":\"NOT_FOUND\"} STOP.\n---\n⚠️ ÉTAPE 3 — CLASSIFICATION\nCORE (client idéal) = handling, piste, bagages, sûreté aéroportuaire, escale, catering aérien, nettoyage avion, fret aérien, assistance en escale, accueil/hospitality aéroportuaire, PMR aéroport\nExemples CORE : Aviapartner, Swissport, Europe Handling, WFS, Checkport, Dnata, Groundforce, Alizé EFT, Newrest, Servair, ICTS, Brinks Aviation, Penauille, City One, Jet Aviation, Alyzia, Ladybird\nEDGE = logistique OU transport AVEC lien aviation/aéroport CONFIRMÉ par web search\nOUT (PAS un client) :\n- ETT / agences d'intérim (liste ci-dessus)\n- Compagnies aériennes (Air France, EasyJet, Transavia...) = donneurs d'ordre, pas nos clients\n- Organismes de formation seuls\n- Postes bureau/RH/IT/finance sans lien terrain\n- Nettoyage/propreté/facilities GÉNÉRALISTES (GSF, Onet, Atalian, Derichebourg, Samsic Propreté) = sauf contrat SPÉCIFIQUE nettoyage avion confirmé\n- Entreprises hors secteur aéro (pharma, luxe, tech, retail, BTP, agro, automobile...)\n- Prestataires techniques/BTP/ingénierie aéroportuaire (balisage, électricité piste, génie civil)\n- Équipementiers / fournisseurs aéro (matériel, GSE, IT aéroportuaire)\nSi OUT → STOP, pas de scoring.\n---\n⚠️ ÉTAPE 4 — SCORING (CORE/EDGE uniquement)\n+4 entreprise aviation confirmée par web search\n+3 métier terrain (piste, bagages, manutention, sûreté, catering)\n+2 localisation CDG / Orly / Le Bourget\n+1 contrat court (CDD, intérim, saisonnier)\nScore final /10\n---\nRÉPONSE JSON (AUCUN TEXTE AUTOUR)\nSi PERTINENT :\n{\"pertinent\":true,\"raison\":\"explication courte\",\"secteur\":\"handling|surete|catering|piste|bagages|nettoyage|escale|fret|accueil|pmr\",\"score\":8,\"classification\":\"CORE|EDGE\",\"activite_entreprise\":\"résumé court\",\"site_web\":\"exemple.com\",\"decisionnaire_probable\":\"DRH|Directeur exploitation|Responsable RH\"}\nSi NON PERTINENT :\n{\"pertinent\":false,\"raison\":\"VALEUR_EXACTE\",\"secteur\":\"NOT_FOUND\",\"score\":0,\"classification\":\"OUT\",\"activite_entreprise\":\"résumé court\",\"site_web\":\"domaine.com ou NOT_FOUND si introuvable\",\"decisionnaire_probable\":\"NOT_FOUND\"}\nValeurs exactes pour \"raison\" si non pertinent :\nETT_concurrente | poste_bureau | hors_aero | compagnie_aerienne | logistique_non_aero | support_non_operationnel | poste_mixte_non_clair | entreprise_non_identifiable | domaine_non_trouve | organisme_formation | facilities_generaliste | equipementier_fournisseur`;\nreturn [{\n  json: {\n    body: {\n      model: \"claude-haiku-4-5-20251001\",\n      max_tokens: 2048,\n      system: systemPrompt,\n      messages: [{ role: \"user\", content: userPrompt }],\n      tools: [{ type: \"web_search_20250305\", name: \"web_search\" }]\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        368
+      ],
+      "id": "36c0ac32-2010-4863-948c-cdf2189c9a19",
+      "name": "qualif claude2"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -2064,
+        688
+      ],
+      "id": "bc913e69-65f1-45b8-85ad-0ff7dfdb83ff",
+      "name": "Lire rejetés",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fa4fd724-d09f-41b2-96a0-508a8e8f96d3",
+              "leftValue": "={{ $json.person_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "7e02bfff-3ad1-431c-8497-434fbee154d2",
+              "leftValue": "={{ $json.classification}}",
+              "rightValue": "OUT",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -272,
+        -352
+      ],
+      "id": "2ff770ab-c869-4f6a-9774-299ab5500e87",
+      "name": "Filter2"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeCompany(name) {\n  if (!name) return \"\";\n  return name\n    .toLowerCase()\n    .replace(/\\s+(sas|sarl|sa|sasu|eurl|sci|scop|eti|group|groupe)\\b/g, \"\")\n    .replace(/[^a-z0-9àâäéèêëïîôùûüÿçœæ]/g, \"\")\n    .trim();\n}\n// Lire directement depuis les nodes Excel\nconst pipelineRows = $('Lire Pipeline2').all();\nconst rejeteRows = $('Lire rejetés').all();\nconst concurrentRows = $('Lire Concurrents').all();\nconst existingCompanies = new Set();\nfor (const row of pipelineRows) {\n  const norm = normalizeCompany(row.json.Entreprise || '');\n  if (norm) existingCompanies.add(norm);\n}\nfor (const row of rejeteRows) {\n  const norm = normalizeCompany(row.json.Company || '');\n  if (norm) existingCompanies.add(norm);\n}\nfor (const row of concurrentRows) {\n  const norm = normalizeCompany(row.json.Entreprise || '');\n  if (norm) existingCompanies.add(norm);\n}\nfunction isExisting(normName) {\n  if (!normName) return false;\n  if (existingCompanies.has(normName)) return true;\n  for (const existing of existingCompanies) {\n    if (normName.includes(existing) || existing.includes(normName)) return true;\n  }\n  return false;\n}\nconst allOffres = $input.all();\nif (!allOffres.length) {\n  return [{ json: { _info: \"aucun item en entrée\" } }];\n}\nconst seenIds = new Set();\nconst seenEntreprises = new Set();\nconst results = [];\nfor (const o of allOffres) {\n  // Dédup par ID\n  const offreId = o.json.id || '';\n  if (offreId) {\n    if (seenIds.has(offreId)) continue;\n    seenIds.add(offreId);\n  }\n  // Dédup par entreprise\n  const nom = o.json.entreprise || '';\n  const norm = normalizeCompany(nom);\n  if (!norm) continue;\n  if (seenEntreprises.has(norm)) continue;\n  seenEntreprises.add(norm);\n  if (isExisting(norm)) continue;\n  results.push({\n    json: {\n      id: o.json.id,\n      intitule: o.json.intitule,\n      entreprise: nom,\n      typeContrat: o.json.typeContrat,\n      lieu: o.json.lieu,\n      codePostal: o.json.codePostal,\n      salaire: o.json.salaire,\n      description: o.json.description,\n      experience: o.json.experience,\n      nombrePostes: o.json.nombrePostes,\n      romeCode: o.json.romeCode,\n      romeLibelle: o.json.romeLibelle,\n      dateCreation: o.json.dateCreation,\n      urlOffre: o.json.urlOffre || o.json.url || '',\n      motsCles: o.json.motsCles,\n      _date_check: new Date().toISOString().split('T')[0]\n    }\n  });\n}\nif (!results.length) {\n  return [{ json: { _info: \"aucune nouvelle entreprise trouvée\" } }];\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        544
+      ],
+      "id": "2644d9b4-3313-4a30-b3ba-c86a7bce9e30",
+      "name": "Code in JavaScript11"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -1616,
+        688
+      ],
+      "id": "cb511fe1-288a-4e76-9476-a862ddcdd501",
+      "name": "Lire config3",
+      "executeOnce": true,
+      "alwaysOutputData": false,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google_jobs"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.MOTS_CLEFS }}"
+            },
+            {
+              "name": "location",
+              "value": "Paris, Île-de-France, France"
+            },
+            {
+              "name": "hl",
+              "value": "fr"
+            },
+            {
+              "name": "api_key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1392,
+        688
+      ],
+      "id": "a0504f48-df02-4a7f-a078-c08b2980b65e",
+      "name": "Search Google Jobs",
+      "executeOnce": false,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json[\"Décideur\"] }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.Email }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $json['Secteur'] }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $json.Score }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.Domaine }}"
+            },
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.ID_Prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.Entreprise }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.Post }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.Linledin }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        -416
+      ],
+      "id": "ae4a6825-b221-46b7-a717-143a092ca9e4",
+      "name": "Ecrire la feuille air2",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.person.name }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.person.email }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $('Loop Over Items5').item.json.entreprise }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $('Loop Over Items5').item.json.urlOffre }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Score",
+              "fieldValue": "={{ $('Loop Over Items5').item.json.score }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Nouveau"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.person.organization.primary_domain }}"
+            },
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.person.id }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $('Loop Over Items5').item.json.company }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.person.title }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.person.linkedin_url }}"
+            },
+            {
+              "column": "Secteur  ",
+              "fieldValue": "={{ $('Loop Over Items5').item.json.secteur }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -416
+      ],
+      "id": "cda66496-1fdc-4d4c-a540-49e1eef01844",
+      "name": "Ecrire la feuille acme",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 6,\n  \"q_organization_domains_list\": [\"{{ $json.site_web }}\"],\n  \"person_titles\": [\"DRH\", \"RRH\", \"responsable ressources humaines\", \"directeur ressources humaines\", \"chargé de recrutement\", \"talent acquisition\", \"HR manager\", \"HR director\", \"head of HR\", \"people operations\"],\n  \"person_seniorities\": [\"owner\", \"founder\", \"c_suite\", \"partner\", \"vp\", \"head\", \"director\", \"manager\", \"senior\"],\n  \"person_locations\": [\"France\"]\n}",
+        "options": {}
+      },
+      "id": "d30a839b-9930-4366-8d0a-1ff36ba1fb29",
+      "name": "Scrape RH3",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1072,
+        -352
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 3,\n  \"q_organization_domains_list\": [\"{{ $json.site_web }}\"],\n  \"person_seniorities\": [\"manager\", \"director\"],\n  \"person_locations\": [\"France\"]\n}",
+        "options": {}
+      },
+      "id": "61d092e4-0722-443c-9c5e-c20ac6db88b3",
+      "name": "Scrape Managers3",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1072,
+        -64
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1296,
+        -352
+      ],
+      "id": "50cf846e-3c83-4a58-8a55-3ce6cc610391",
+      "name": "Merge6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "047ac36c-f057-4318-bf66-370073cc74aa",
+              "leftValue": "={{ [\"poste_mixte_non_clair\", \"entreprise_non_identifiable\", \"domaine_non_trouve\"].includes($json.raison) }}",
+              "rightValue": "NOT_FOUND",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "3c0139c5-b21a-49ef-97e6-7ab7262dc1df",
+              "leftValue": "={{ $json.site_web }}",
+              "rightValue": "NOT_FOUND",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        400,
+        368
+      ],
+      "id": "4d1fef72-4f24-4434-a922-76e4229c4539",
+      "name": "If13"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "047ac36c-f057-4318-bf66-370073cc74aa",
+              "leftValue": "={{ $json.raison }}",
+              "rightValue": "ETT_concurrente",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        368
+      ],
+      "id": "8661c315-1588-480b-b877-6bc426965b20",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1296,
+        400
+      ],
+      "id": "3e9830a5-c8d2-40fa-9c92-a5afe98a7eed",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json;\nconst people = item.people || [];\nconst domaine = $('Code in JavaScript7').last().json.site_web || item.domaine_extrait || item.domaine || '';\nconst entreprise = $('Loop Over Items4').last().json.entreprise || item.entreprise || '';\nconst urlOffre = $('Loop Over Items4').last().json.urlOffre || item.urlOffre || '';\n\nif (people.length === 0) {\n  return [{\n    json: {\n      person_id: null,\n      first_name: null,\n      last_name: null,\n      title: null,\n      linkedin_url: '',\n      has_email: false,\n      company: '',\n      domaine: domaine,\n      entreprise: entreprise,\n      classification: 'OUT',\n      raison: 'ETT_concurrente',\n      urlOffre: urlOffre,\n      _no_leads: true\n    }\n  }];\n}\n\nreturn people.map(person => ({\n  json: {\n    person_id: person.id,\n    first_name: person.first_name,\n    last_name: person.last_name_obfuscated || person.last_name,\n    title: person.title,\n    linkedin_url: person.linkedin_url || '',\n    has_email: person.has_email,\n    company: person.organization?.name || '',\n    domaine: domaine,\n    entreprise: entreprise,\n    classification: 'OUT',\n    raison: 'ETT_concurrente',\n    urlOffre: urlOffre\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        400
+      ],
+      "id": "38dd556c-d264-4b06-a227-a3611fcb2769",
+      "name": "Code in JavaScript",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 6,\n  \"q_organization_domains_list\": [\"{{ $json.site_web }}\"],\n  \"person_titles\": [\"DRH\", \"RRH\", \"responsable ressources humaines\", \"directeur ressources humaines\", \"chargé de recrutement\", \"talent acquisition\", \"HR manager\", \"HR director\", \"head of HR\", \"people operations\"],\n  \"person_seniorities\": [\"owner\", \"founder\", \"c_suite\", \"partner\", \"vp\", \"head\", \"director\", \"manager\", \"senior\"],\n  \"person_locations\": [\"France\"]\n}",
+        "options": {}
+      },
+      "id": "e34a98c3-f782-414d-9182-7e4fc264b8e7",
+      "name": "Scrape RH",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        848,
+        320
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page\": 1,\n  \"per_page\": 3,\n  \"q_organization_domains_list\": [\"{{ $json.site_web }}\"],\n  \"person_seniorities\": [\"manager\", \"director\"],\n  \"person_locations\": [\"France\"]\n}",
+        "options": {}
+      },
+      "id": "4572bab7-d62b-4145-b3cd-1c0627eb159e",
+      "name": "Scrape Managers",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        848,
+        608
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1072,
+        320
+      ],
+      "id": "7afed182-1308-45ec-9da8-7805c24293a3",
+      "name": "Merge8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/match",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "reveal_personal_emails",
+              "value": "true"
+            },
+            {
+              "name": "reveal_phone_number",
+              "value": "true"
+            },
+            {
+              "name": "webhook_url",
+              "value": "n8n.exemple.internal/webhook/00000000-0000-0000-0000-000000000000"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REMPLACER"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.person_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0bdafdb2-6eed-46d8-a814-4267c5313765",
+      "name": "Get Email from Apollo",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        176,
+        -704
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "batchSize": "=1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        -640
+      ],
+      "id": "f27f8595-4cb7-4115-9c94-b8605567c8ee",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        848,
+        -640
+      ],
+      "id": "8d9266e7-758d-4db2-b405-57a4a1ffd687",
+      "name": "Wait",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fa4fd724-d09f-41b2-96a0-508a8e8f96d3",
+              "leftValue": "={{ $json.person_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "7e02bfff-3ad1-431c-8497-434fbee154d2",
+              "leftValue": "={{ $json.classification}}",
+              "rightValue": "OUT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -272,
+        -640
+      ],
+      "id": "22f494b8-593e-4c46-affd-499fd379d03f",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -1840,
+        688
+      ],
+      "id": "80404315-829a-4836-8645-f001d2fd60d3",
+      "name": "Lire Concurrents",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json.person.name }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.person.email }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $('Loop Over Items').item.json.entreprise }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $('Loop Over Items').item.json.urlOffre }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.person.organization.primary_domain }}"
+            },
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.person.id }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.person.title }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.person.linkedin_url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -704
+      ],
+      "id": "ddb94138-639f-4d69-a1f6-06d334e872bf",
+      "name": "Ecrire la feuille acme concurrent",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Décideur",
+              "fieldValue": "={{ $json[\"Décideur\"] }}"
+            },
+            {
+              "column": "Email",
+              "fieldValue": "={{ $json.Email }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $json.Domaine }}"
+            },
+            {
+              "column": "ID_Prospect",
+              "fieldValue": "={{ $json.ID_Prospect }}"
+            },
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $json.Entreprise }}"
+            },
+            {
+              "column": "Post",
+              "fieldValue": "={{ $json.Post }}"
+            },
+            {
+              "column": "Linledin",
+              "fieldValue": "={{ $json.Linledin }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        -704
+      ],
+      "id": "b110c622-5eef-477b-bec6-dad4074e0051",
+      "name": "Ecrire la feuille air concurrent",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": "=1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        -944
+      ],
+      "id": "cf6defc3-7740-42f5-8538-eddee3bf9cb4",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        -944
+      ],
+      "id": "11bf2d20-1d41-4e1d-8d53-351c9eee7065",
+      "name": "Wait1",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fa4fd724-d09f-41b2-96a0-508a8e8f96d3",
+              "leftValue": "={{ $json.person_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "7e02bfff-3ad1-431c-8497-434fbee154d2",
+              "leftValue": "={{ $json.classification}}",
+              "rightValue": "OUT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -272,
+        -944
+      ],
+      "id": "72bd1683-ed11-4002-9a7a-e6af2ac04f4b",
+      "name": "Filter1"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $('Loop Over Items1').item.json.entreprise }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $('Loop Over Items1').item.json.urlOffre }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $('Loop Over Items1').item.json.domaine }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        -1024
+      ],
+      "id": "0ff3eff8-9eae-45f3-948f-a8f046ffc21d",
+      "name": "Ecrire la feuille acme concurrent1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Entreprise",
+              "fieldValue": "={{ $('Loop Over Items1').last().json.entreprise }}"
+            },
+            {
+              "column": "Source",
+              "fieldValue": "={{ $('Loop Over Items1').last().json.urlOffre }}"
+            },
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Domaine",
+              "fieldValue": "={{ $('Loop Over Items1').last().json.domaine }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -1024
+      ],
+      "id": "8b14eed7-10e1-4635-95b3-f9ca77a81dca",
+      "name": "Ecrire la feuille acme concurrent2",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "table": {
+          "__rl": true,
+          "value": "{EB8811DA-C605-469E-8E97-AC9FD2B649E3}",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Source",
+              "fieldValue": "={{ $('Loop Over Items4').last().json.urlOffre }}"
+            },
+            {
+              "column": "Company",
+              "fieldValue": "={{ $('Loop Over Items4').last().json.entreprise }}"
+            },
+            {
+              "column": "Position",
+              "fieldValue": "={{ $('Loop Over Items4').last().json.intitule }}"
+            },
+            {
+              "column": "Raison",
+              "fieldValue": "={{ $json.raison }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        128
+      ],
+      "id": "27c2f94e-c769-4338-aeb0-3eff51723345",
+      "name": "Ecrire la feuille rejeté",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Loop Over Keywords1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If7": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Keywords1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Keywords1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items4": {
+      "main": [
+        [
+          {
+            "node": "Filter2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "qualif claude2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire Pipeline2": {
+      "main": [
+        [
+          {
+            "node": "Lire rejetés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request7": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If10": {
+      "main": [
+        [
+          {
+            "node": "Merge7",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Scrape RH3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Managers3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ecrire la feuille rejeté2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "If13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille rejeté2": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille rejeté",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge7": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Email from Apollo2": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille acme",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items5": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Email from Apollo2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript9": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait6": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger2": {
+      "main": [
+        [
+          {
+            "node": "Lire Pipeline2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait8": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "qualif claude2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire rejetés": {
+      "main": [
+        [
+          {
+            "node": "Lire Concurrents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript11": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire config3": {
+      "main": [
+        [
+          {
+            "node": "Search Google Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Google Jobs": {
+      "main": [
+        [
+          {
+            "node": "If7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille air2": {
+      "main": [
+        [
+          {
+            "node": "Wait6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille acme": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille air2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape RH3": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Managers3": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge6": {
+      "main": [
+        [
+          {
+            "node": "Merge7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If13": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Scrape RH",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Managers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "If10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape RH": {
+      "main": [
+        [
+          {
+            "node": "Merge8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Managers": {
+      "main": [
+        [
+          {
+            "node": "Merge8",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge8": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Email from Apollo": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille acme concurrent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Email from Apollo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire Concurrents": {
+      "main": [
+        [
+          {
+            "node": "Lire config3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille acme concurrent": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille air concurrent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille air concurrent": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Ecrire la feuille acme concurrent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille acme concurrent1": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille acme concurrent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille acme concurrent2": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille rejeté": {
+      "main": [
+        [
+          {
+            "node": "Wait8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "saveExecutionProgress": true
+  },
+  "tags": []
+}

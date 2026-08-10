@@ -1,0 +1,100 @@
+{
+  "name": "Pipeline - Liste dedoublonnage evenementiel (lecture) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dedup-evenementiel",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -128,
+        -176
+      ],
+      "id": "62616228-17ae-4296-9e70-f5212b6327af",
+      "name": "Webhook dedup",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        -176
+      ],
+      "id": "34cf7981-63fe-4647-993d-4feb6c45f581",
+      "name": "Lire Air evenementiel",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Entreprise'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -176
+      ],
+      "id": "2217ba41-e46a-48da-ac9d-bf3fb8299f50",
+      "name": "Construire la liste"
+    }
+  ],
+  "connections": {
+    "Webhook dedup": {
+      "main": [
+        [
+          {
+            "node": "Lire Air evenementiel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire Air evenementiel": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

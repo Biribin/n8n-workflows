@@ -1,0 +1,1301 @@
+{
+  "name": "phone scraper ecriture asynchrone toute page cofondu",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "oui"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        432
+      ],
+      "id": "b183d6cb-353b-4a49-94ec-f548d772d29f",
+      "name": "Ecrire la feuille pipeline1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "48385a99-4f00-43c9-ac73-b4046e860602",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        336
+      ],
+      "id": "356434c8-f6d5-4023-bf87-b730a026832f",
+      "name": "Webhook",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        432
+      ],
+      "id": "92f623f7-448d-41d2-a728-4a0b33aa15f2",
+      "name": "Wait",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.ID_Prospect }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json[\"Téléphone\"] }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "oui"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        16,
+        432
+      ],
+      "id": "bb6de2c3-522b-47a5-8d6d-c7ad5f55b9ea",
+      "name": "Ecrire la feuille pipeline",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f7a41b77-2bdc-43d1-b0b7-52d9dabf17a6",
+              "leftValue": "={{ $json.body.people[0].status }}",
+              "rightValue": "failure",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -880,
+        336
+      ],
+      "id": "b9c66e44-baee-475e-a21b-53dbc53ac53c",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        432
+      ],
+      "id": "bd1a2e7d-e576-4f0c-970a-b9297e3345de",
+      "name": "Wait1",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f7a41b77-2bdc-43d1-b0b7-52d9dabf17a6",
+              "leftValue": "={{ $json.body.people[0].status }}",
+              "rightValue": "failure",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -880,
+        -80
+      ],
+      "id": "7296d154-7761-4db5-9122-8af8d6b1edd5",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -176
+      ],
+      "id": "7b142c2a-e679-4f91-99a7-1524207315de",
+      "name": "Wait2",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "non"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -176
+      ],
+      "id": "89975a42-3e95-46e1-9e1b-269f8bfabbec",
+      "name": "Ecrire hotellerie restaurant",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "77576b83-f1fb-4ca0-97a6-c18e6c0a5016",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        -80
+      ],
+      "id": "c477b16c-1fad-402b-9936-ef2cc31e97b3",
+      "name": "Webhook1",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f7a41b77-2bdc-43d1-b0b7-52d9dabf17a6",
+              "leftValue": "={{ $json.body.people[0].status }}",
+              "rightValue": "failure",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -880,
+        -496
+      ],
+      "id": "28b12198-8124-491e-adcf-748044983ed6",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -400
+      ],
+      "id": "bf890dd8-9642-4fde-b7ac-25677e6750d2",
+      "name": "Wait3",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "6d979915-dbc9-4c38-a5f4-f91cc67696d1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        -496
+      ],
+      "id": "70af2b59-2d63-4e52-aa8c-78fdda793a91",
+      "name": "Webhook2",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "oui"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -400
+      ],
+      "id": "2828ee44-a65a-48da-baf2-f21c59700548",
+      "name": "Ecrire transport logistique",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f7a41b77-2bdc-43d1-b0b7-52d9dabf17a6",
+              "leftValue": "={{ $json.body.people[0].status }}",
+              "rightValue": "failure",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -880,
+        -912
+      ],
+      "id": "187d926b-b89b-47cf-a974-57050e243b68",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -816
+      ],
+      "id": "44c6e2f4-e291-4a6b-85f5-f4def926e438",
+      "name": "Wait4",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "oui"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -816
+      ],
+      "id": "d936deb9-5a87-4e23-8d4b-49c1c6fdaac6",
+      "name": "Ecrire evenementiel",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "03558447-a0d7-419d-9aac-7bb4100981eb",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        -912
+      ],
+      "id": "fc169764-f0d0-456a-aa02-f676eecc3e56",
+      "name": "Webhook3",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f7a41b77-2bdc-43d1-b0b7-52d9dabf17a6",
+              "leftValue": "={{ $json.body.people[0].status }}",
+              "rightValue": "failure",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -880,
+        -1328
+      ],
+      "id": "477cc2fd-1d50-46be-bc3b-13ca980fe314",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -1232
+      ],
+      "id": "e013cca9-1598-47dc-a294-1f63a96701f7",
+      "name": "Wait5",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aa90dd9d-cc1e-427c-b814-5566bb44feac",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        -1328
+      ],
+      "id": "573528e0-ab1a-4390-a80c-9028552195c5",
+      "name": "Webhook4",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "oui"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -1232
+      ],
+      "id": "90b37131-5e64-4ab9-96ed-ac12ae2f4f5b",
+      "name": "Ecrire manutention",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -1424
+      ],
+      "id": "f28ef72f-95f3-465f-8325-9aabc3b1c1c7",
+      "name": "Wait6",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "non"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -1424
+      ],
+      "id": "d31fbe64-f3a6-48c2-b7c4-b4e7688159d6",
+      "name": "Ecrire manutention1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -1008
+      ],
+      "id": "2066ca0d-6bcb-4417-921e-0ff5a4dbd722",
+      "name": "Wait7",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "non"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -1008
+      ],
+      "id": "90a681ae-ae0e-4d0d-92a4-a171e2ee7c1e",
+      "name": "Ecrire evenementiel1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        -592
+      ],
+      "id": "3ebfc6b0-aa06-4338-a845-b1122521df7f",
+      "name": "Wait8",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "non"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        -592
+      ],
+      "id": "d23acd84-1d62-4e90-8ce1-02c560ed39b3",
+      "name": "Ecrire transport logistique1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        16
+      ],
+      "id": "7ee513a3-3484-471e-8370-9d58228bb514",
+      "name": "Wait9",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "oui"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        16
+      ],
+      "id": "21018884-9c0c-4ec4-a0cf-9049791568ba",
+      "name": "Ecrire hotellerie restaurant1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.body.people[0].id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json.body.people[0].phone_numbers[0].raw_number }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "non"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        240
+      ],
+      "id": "59bde597-38c0-43aa-9bf7-82c7d9b47861",
+      "name": "Ecrire la feuille pipeline2",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        240
+      ],
+      "id": "f681e37d-ead6-4c13-a9f8-94cfb9a4ae22",
+      "name": "Wait10",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $json.ID_Prospect }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Téléphone",
+              "fieldValue": "={{ $json[\"Téléphone\"] }}"
+            },
+            {
+              "column": "Tel_verifie",
+              "fieldValue": "non"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        16,
+        240
+      ],
+      "id": "7f41bbcf-567e-486f-a03a-fd81adf1864d",
+      "name": "Ecrire la feuille pipeline3",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        240
+      ],
+      "id": "54677a10-682b-4931-ac78-59ed2571c63d",
+      "name": "Wait11",
+      "webhookId": "A_REGENERER"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille pipeline1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille pipeline1": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Wait10",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Wait9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Ecrire hotellerie restaurant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Wait8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait3": {
+      "main": [
+        [
+          {
+            "node": "Ecrire transport logistique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Wait7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait4": {
+      "main": [
+        [
+          {
+            "node": "Ecrire evenementiel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook3": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Wait6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait5": {
+      "main": [
+        [
+          {
+            "node": "Ecrire manutention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook4": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait6": {
+      "main": [
+        [
+          {
+            "node": "Ecrire manutention1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait7": {
+      "main": [
+        [
+          {
+            "node": "Ecrire evenementiel1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait8": {
+      "main": [
+        [
+          {
+            "node": "Ecrire transport logistique1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait9": {
+      "main": [
+        [
+          {
+            "node": "Ecrire hotellerie restaurant1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ecrire la feuille pipeline2": {
+      "main": [
+        [
+          {
+            "node": "Wait11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait10": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille pipeline2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait11": {
+      "main": [
+        [
+          {
+            "node": "Ecrire la feuille pipeline3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

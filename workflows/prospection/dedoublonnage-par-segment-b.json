@@ -1,0 +1,100 @@
+{
+  "name": "Pipeline - Liste dedoublonnage hotellerie (lecture) claude",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dedup-hotellerie",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -208,
+        -144
+      ],
+      "id": "a4d45c3e-d6e5-4945-8e80-949ca39cd09c",
+      "name": "Webhook dedup",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        16,
+        -144
+      ],
+      "id": "5e1d4955-de62-4420-a47c-2381f136d136",
+      "name": "Lire Air hotellerie",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst entreprises = [...new Set(\n  items\n    .map(i => (i.json['Entreprise'] || '').toString().trim())\n    .filter(Boolean)\n)];\nreturn [{ json: { entreprises_deja_collectees: entreprises, total: entreprises.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        -144
+      ],
+      "id": "9df8fbad-b3e6-4996-977f-ef61610bfcbd",
+      "name": "Construire la liste"
+    }
+  ],
+  "connections": {
+    "Webhook dedup": {
+      "main": [
+        [
+          {
+            "node": "Lire Air hotellerie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire Air hotellerie": {
+      "main": [
+        [
+          {
+            "node": "Construire la liste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

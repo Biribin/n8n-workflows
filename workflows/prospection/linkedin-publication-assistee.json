@@ -1,0 +1,380 @@
+{
+  "name": "Automatisation Linkedin",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "shareMediaCategory": "IMAGE",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        832,
+        64
+      ],
+      "id": "6725f636-e537-42fd-9ea9-b9fe9ecf4f55",
+      "name": "Create a post",
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "linkedInOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9,
+              "triggerAtMinute": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -320,
+        64
+      ],
+      "id": "cbb6990c-9567-4976-90aa-7ca217434c72",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 728848360,
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "keepFirstRow": true
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -32,
+        64
+      ],
+      "id": "b2124fe1-968a-4fc1-acf3-cef510065fa6",
+      "name": "Clear sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1312,
+        64
+      ],
+      "id": "4d9a22a2-ff05-416b-8705-646175e7617c",
+      "name": "Send a text message",
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "operation": "classify",
+        "simplify": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        64
+      ],
+      "id": "bb0ba899-3515-4f6f-870a-284178602d49",
+      "name": "Classify text for violations",
+      "credentials": {
+        "openAiApi": {
+          "id": "A_RECONNECTER",
+          "name": "openAiApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "Professional advertising photo for a French temporary staffing agency \nspecializing in airport ground operations. Scene set at Paris-Orly or \nCDG airport at golden hour (sunrise, warm orange and blue tones). \n\nForeground: a confident airport ground crew worker in a high-visibility \norange/yellow vest, safety helmet, wearing a badge, looking straight at \nthe camera with a proud expression. Background slightly blurred showing \nan aircraft being loaded, jet bridges, and airport apron activity.\n\nBottom of image: sleek modern text overlay \"acme INTÉRIM\" in bold white \nsans-serif font with a subtle dark gradient band. Tagline below: \n\"L'expertise au sol, l'excellence en vol.\"\n\nStyle: cinematic, high-end corporate photography, 4K sharp, professional \nlighting, realistic, LinkedIn/Instagram ad format (1:1 or 4:5 ratio). \nColors: deep blue, orange safety vest, white accents. \nNo cartoonish elements, photorealistic only"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        64
+      ],
+      "id": "ac7dd4a4-d5a1-41d8-984e-3b1f242d6fd1",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "A_RECONNECTER",
+          "name": "openAiApi (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 728848360,
+          "mode": "list",
+          "cachedResultName": "votre-document",
+          "cachedResultUrl": "https://exemple.internal/document"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "PRENOM ": "adam",
+            "NOM": "boukouna"
+          },
+          "matchingColumns": [
+            "PRENOM "
+          ],
+          "schema": [
+            {
+              "id": "DATE",
+              "displayName": "DATE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "NOM",
+              "displayName": "NOM",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PRENOM ",
+              "displayName": "PRENOM ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEL",
+              "displayName": "TEL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FORMATIONS",
+              "displayName": "FORMATIONS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "EMAIL",
+              "displayName": "EMAIL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "COMMENTAIRE",
+              "displayName": "COMMENTAIRE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Payement",
+              "displayName": "Payement",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Payement",
+              "displayName": "Date Payement",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prix",
+              "displayName": "Prix",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "4",
+              "displayName": "4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1072,
+        64
+      ],
+      "id": "082c18aa-70de-4351-82a0-010d161743ae",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "googleSheetsOAuth2Api (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Create a post": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Clear sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear sheet": {
+      "main": [
+        [
+          {
+            "node": "Classify text for violations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify text for violations": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Create a post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

@@ -1,6 +1,6 @@
 # Workflows n8n
 
-Une partie de ma plateforme d'automatisation auto-hébergée : **213 workflows conçus, 109 actifs en production**. **29** sont publiés ici, en licence MIT, parce qu'ils sont réutilisables tels quels et qu'ils ne racontent rien de confidentiel. Le reste est décrit plus bas sans son JSON.
+Une partie de ma plateforme d'automatisation auto-hébergée : **213 workflows conçus, 109 actifs en production**. **49** sont publiés ici, en licence MIT, parce qu'ils sont réutilisables tels quels et qu'ils ne racontent rien de confidentiel. Le reste est décrit plus bas sans son JSON.
 
 Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand du code est nécessaire je le fais produire par des agents puis je le recette. Ce qui est publié ici a tourné en vrai, pas dans un tutoriel.
 
@@ -9,6 +9,7 @@ Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand d
 | Famille | Workflows | À quoi ça sert |
 |---|---:|---|
 | [Recherche d'emploi automatisée](workflows/recherche-emploi/) | 7 | Chaîne complète de candidature : découverte d'offres, rédaction adaptée, envoi, relance, lecture des réponses. Projet personnel, donc publiable en entier. |
+| [Prospection et génération de leads](workflows/prospection/) | 20 | Identification de prospects, enrichissement, déduplication et rédaction de messages personnalisés. Toutes les fiches contact ont été retirées : ce qui reste est la mécanique. |
 | [Exploitation de n8n](workflows/exploitation-n8n/) | 6 | Ce qu'il faut ajouter quand on passe de 5 workflows à 100 : capture d'erreur, relance de déploiement, suivi du coût des API, veille. |
 | [Réglementaire français](workflows/reglementaire-france/) | 5 | Surveillance de sources officielles (Légifrance, BOFiP, OpenFisca) pour détecter qu'un paramétrage est devenu faux avant que la paie ne parte. |
 | [IA appliquée](workflows/ia-appliquee/) | 5 | LLM branché sur du réel : réponses aux avis et commentaires, classement de documents, répartition de demandes. Toujours avec relecture humaine avant publication. |
@@ -24,6 +25,29 @@ Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand d
 - **[05-decouverte-ats](workflows/recherche-emploi/05-decouverte-ats.json)** Balayage quotidien de dizaines de connecteurs ATS (Greenhouse, Lever, Workday...) via un service d'agrégation, pour ne pas dépendre d'un seul portail d'emploi.
 - **[harnais-de-test-agent-llm](workflows/recherche-emploi/harnais-de-test-agent-llm.json)** Harnais de non-régression pour un agent LLM : rejoue le vrai prompt de production et applique une série de contrôles automatiques sur ses règles absolues.
 - **[veille-forum-discourse](workflows/recherche-emploi/veille-forum-discourse.json)** Veille sur un forum Discourse : lecture d'une catégorie en JSON, scoring de pertinence par un LLM contre un profil, déduplication par data table n8n, alerte seulement sur ce qui compte.
+
+### Prospection et génération de leads
+
+- **[apollo-enrichissement-par-lots](workflows/prospection/apollo-enrichissement-par-lots.json)** Enrichissement d'une liste de contacts via l'API Apollo, par lots, avec reprise là où la boucle s'est arrêtée.
+- **[apollo-pipeline-de-leads](workflows/prospection/apollo-pipeline-de-leads.json)** Pipeline de génération de leads sur l'API Apollo : recherche d'organisations, recherche de personnes dans ces organisations, révélation de l'adresse professionnelle, puis écriture en feuille.
+- **[dedoublonnage-multi-feuilles](workflows/prospection/dedoublonnage-multi-feuilles.json)** Construction d'une liste de dédoublonnage à partir de plusieurs feuilles à la fois, exposée en webhook pour être interrogée par les autres workflows.
+- **[dedoublonnage-par-segment-a](workflows/prospection/dedoublonnage-par-segment-a.json)** Déclinaison du dédoublonnage sur un segment précis.
+- **[dedoublonnage-par-segment-b](workflows/prospection/dedoublonnage-par-segment-b.json)** Deuxième déclinaison du dédoublonnage par segment.
+- **[dedoublonnage-par-segment-c](workflows/prospection/dedoublonnage-par-segment-c.json)** Troisième déclinaison du dédoublonnage par segment.
+- **[ecriture-en-feuille-par-segment-a](workflows/prospection/ecriture-en-feuille-par-segment-a.json)** Réception d'une liste en webhook, éclatement en lignes, écriture dans la feuille du segment.
+- **[ecriture-en-feuille-par-segment-b](workflows/prospection/ecriture-en-feuille-par-segment-b.json)** Même motif d'écriture, autre segment.
+- **[ecriture-en-feuille-par-segment-c](workflows/prospection/ecriture-en-feuille-par-segment-c.json)** Même motif d'écriture, autre segment.
+- **[ecriture-en-feuille-par-segment-d](workflows/prospection/ecriture-en-feuille-par-segment-d.json)** Même motif d'écriture, autre segment, avec une étape d'éclatement supplémentaire.
+- **[ecriture-en-feuille-par-segment-e](workflows/prospection/ecriture-en-feuille-par-segment-e.json)** Même motif d'écriture, autre segment.
+- **[linkedin-post-hebdo-depuis-une-veille](workflows/prospection/linkedin-post-hebdo-depuis-une-veille.json)** Publication hebdomadaire sur LinkedIn alimentée par une veille RSS : lecture des flux, rédaction par LLM, envoi pour relecture avant publication.
+- **[linkedin-publication-assistee](workflows/prospection/linkedin-publication-assistee.json)** Chaîne de publication LinkedIn : sujet tiré d'une feuille, rédaction par LLM, envoi du brouillon sur Telegram pour relecture, publication après accord.
+- **[linkedin-publication-sous-workflow](workflows/prospection/linkedin-publication-sous-workflow.json)** Version sous-workflow de la publication LinkedIn, appelable depuis une autre chaîne.
+- **[radar-de-veille-commerciale](workflows/prospection/radar-de-veille-commerciale.json)** Radar quotidien sur des sources publiques : collecte, filtrage, dédoublonnage contre l'historique, puis alerte sur les seules nouveautés.
+- **[recherche-de-prospects-sur-formulaire](workflows/prospection/recherche-de-prospects-sur-formulaire.json)** Recherche de prospects déclenchée par un formulaire : un nom d'entreprise en entrée, recherche d'organisation, recherche de personnes, enrichissement, écriture en feuille.
+- **[scraper-offres-france-travail](workflows/prospection/scraper-offres-france-travail.json)** Scraping de l'API France Travail par mots-clés, avec pagination, temporisation de quota et écriture incrémentale.
+- **[scraper-offres-indeed](workflows/prospection/scraper-offres-indeed.json)** Scraping d'un agrégateur d'offres : boucle par mots-clés, pagination, dédoublonnage, écriture des retenues et des rejetées.
+- **[scraping-asynchrone-avec-reprise](workflows/prospection/scraping-asynchrone-avec-reprise.json)** Scraping d'un annuaire page par page, en asynchrone : chaque page est relancée par un webhook plutôt que par une boucle, ce qui évite le délai maximum d'exécution sur un gros volume.
+- **[veille-offres-avec-scoring-llm](workflows/prospection/veille-offres-avec-scoring-llm.json)** Balayage d'un agrégateur d'offres sur une liste de mots-clés, scoring de pertinence par LLM, puis écriture des retenues et des rejetées dans deux feuilles distinctes.
 
 ### Exploitation de n8n
 
@@ -72,7 +96,6 @@ Voici quand même de quoi il s'agit. **Le détail, les captures et une démonstr
 |---|---:|---:|---|
 | Temps de travail et émargement | 39 | 21 | Réconciliation entre planning prévisionnel, pointage badgeuse et relevé client, calcul des heures et des majorations de nuit. |
 | Référentiels RH | 28 | 11 | Synchronisation et contrôle des référentiels agents : identité, badges aéroportuaires, habilitations, formations, absences. |
-| Prospection et génération de leads | 22 | 1 | Identification de prospects, enrichissement, déduplication et rédaction de messages personnalisés. |
 | Bac à sable | 19 | 5 | Essais, sondes de débogage, copies de travail. Gardés pour l'historique, sans valeur de démonstration. |
 | Courriel, OCR et ingestion documentaire | 18 | 7 | Lecture de boîtes Outlook multiples, extraction des pièces jointes, OCR par LLM, résolution d'identité avec table d'exceptions apprise. |
 | Paie et déclaratif social | 17 | 15 | DSN, DPAE, prélèvement à la source, cotisations, acomptes, facturation mensuelle. |
