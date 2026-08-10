@@ -1,5 +1,5 @@
 {
-  "name": "Pipeline - Liste dedoublonnage evenementiel (lecture) claude",
+  "name": "Dedoublonnage par segment a",
   "active": false,
   "nodes": [
     {

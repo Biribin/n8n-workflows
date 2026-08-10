@@ -1,5 +1,5 @@
 {
-  "name": "Pipeline - Liste dedoublonnage hotellerie (lecture) claude",
+  "name": "Dedoublonnage par segment b",
   "active": false,
   "nodes": [
     {

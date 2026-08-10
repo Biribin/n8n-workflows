@@ -1,0 +1,873 @@
+{
+  "name": "Cold outreach cadence et plafond",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */20 6-20 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -224,
+        640
+      ],
+      "id": "21d0e718-9ca0-473f-8620-051650187fb3",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {
+          "rawData": false
+        }
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        640
+      ],
+      "id": "175e9c7b-1984-4e43-930e-c9ea10d56e3d",
+      "name": "Lire pipeline3",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "93f36189-e8f3-4dc6-9dfc-644a35afd03c",
+              "leftValue": "={{ $json.Statut }}",
+              "rightValue": "Contacté",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b12a8885-d45a-4546-a146-521c17bc3d2b",
+              "leftValue": "={{ $json.Email_Statut }}",
+              "rightValue": "❌ Mauvais",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "591f2f9b-7620-4786-977c-8829923b155f",
+              "leftValue": "={{ typeof $json.Date_J0 === 'number' ? DateTime.fromMillis(($json.Date_J0 - 25569) * 86400000).toISO() : DateTime.fromFormat($json.Date_J0.toString(), 'dd-MM-yyyy').toISO() }}",
+              "rightValue": "={{ $now.minus({days: 5}).startOf('day').toISO() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "beforeOrEquals"
+              }
+            },
+            {
+              "id": "f277c28f-0ec2-4c60-adbe-dd7d2f174d9b",
+              "leftValue": "={{ $json.Action }}",
+              "rightValue": "Stop",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        640
+      ],
+      "id": "b244ec5b-197a-4388-8ca7-235e14f1b2ee",
+      "name": "Filter1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        448,
+        640
+      ],
+      "id": "c6c65b66-cf28-4f42-8dd1-f345e860bf33",
+      "name": "Limit1"
+    },
+    {
+      "parameters": {
+        "toRecipients": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.html }}\n",
+        "additionalFields": {
+          "ccRecipients": "prenom.nom@exemple.fr",
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        896,
+        640
+      ],
+      "id": "0dbfbc59-31fe-4749-9de6-16d395313b32",
+      "name": "Send a message3",
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOutlookOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $('Limit1').item.json.ID_Prospect }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.format('dd/MM/yyyy') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Relance J5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        640
+      ],
+      "id": "7f7377de-1387-44c9-8986-9a52c6289043",
+      "name": "update pipeline3",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prospect = $(\"Limit1\").first().json;\n\n// Extraire prenom du decideur\nconst decideur = (prospect.Décideur || \"\").trim().split(/\\s+/)[0] || \"Madame, Monsieur\";\n\nconst html = `<div style=\"font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;max-width:650px;\">\n<p style=\"margin:0 0 14px 0;\">Bonjour {{decideur_prenom}},</p><p style=\"margin:0 0 14px 0;\">Je reviens vers vous car lorsqu'une entreprise recherche de nouveaux profils, le besoin peut parfois évoluer rapidement : recrutement plus long que prévu, remplacement temporaire, hausse d'activité ou nécessité de sécuriser une équipe pendant la période de recherche.</p><p style=\"margin:0 0 14px 0;\">Dans ces situations, l'intérim peut être une solution complémentaire intéressante, notamment pour maintenir l'activité pendant qu'un recrutement en CDI ou CDD se poursuit.</p><p style=\"margin:0 0 14px 0;\">ACME Aviation intervient précisément dans cette logique : proposer des profils disponibles, assurer un suivi sérieux et permettre à l'entreprise de gagner en souplesse lorsque le besoin est immédiat.</p><p style=\"margin:0 0 14px 0;\">Je serais ravie d'échanger quelques minutes avec vous afin de voir si cette approche pourrait correspondre à vos besoins actuels ou futurs.</p><p style=\"margin:0 0 14px 0;\">Auriez-vous une disponibilité cette semaine ?</p><p style=\"margin:0 0 14px 0;\">Bien cordialement,</p>\n<br><br>\n<!-- votre bloc de signature ici -->\n</div>`\n  .replace(/\\{\\{decideur_prenom\\}\\}/g, decideur)\n  .replace(/\\{\\{entreprise\\}\\}/g, prospect.Entreprise || \"\");\n\nreturn [{\n  json: {\n    to: prospect.Email,\n    subject: `Vos besoins en recrutement et renfort`,\n    html: html\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        640
+      ],
+      "id": "637cf6a1-e1db-4a54-a4eb-5c3246908325",
+      "name": "Prepa mail J-"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */20 6-20 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -224,
+        864
+      ],
+      "id": "76e3316a-8ce0-4e77-a32e-46389d10b530",
+      "name": "Schedule Trigger2"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {
+          "rawData": false
+        }
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        864
+      ],
+      "id": "504a69fe-c49a-4fe0-8550-99a225e9e7c7",
+      "name": "Lire pipeline4",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "93f36189-e8f3-4dc6-9dfc-644a35afd03c",
+              "leftValue": "={{ $json.Statut }}",
+              "rightValue": "Contacté",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b12a8885-d45a-4546-a146-521c17bc3d2b",
+              "leftValue": "={{ $json.Email_Statut }}",
+              "rightValue": "❌ Mauvais",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "591f2f9b-7620-4786-977c-8829923b155f",
+              "leftValue": "={{ typeof $json.Date_J0 === 'number' ? DateTime.fromMillis(($json.Date_J0 - 25569) * 86400000).toISO() : DateTime.fromFormat($json.Date_J0.toString(), 'dd-MM-yyyy').toISO() }}",
+              "rightValue": "={{ $now.minus({days: 12}).startOf('day').toISO() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "beforeOrEquals"
+              }
+            },
+            {
+              "id": "f277c28f-0ec2-4c60-adbe-dd7d2f174d9b",
+              "leftValue": "={{ $json.Action }}",
+              "rightValue": "Stop",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        864
+      ],
+      "id": "d31c64eb-0841-4f35-9181-143ba7efa3f6",
+      "name": "Filter2"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        448,
+        864
+      ],
+      "id": "2a7a8348-93f4-46a2-a8f6-7a59b148e77e",
+      "name": "Limit2"
+    },
+    {
+      "parameters": {
+        "toRecipients": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.html }}",
+        "additionalFields": {
+          "ccRecipients": "prenom.nom@exemple.fr",
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        896,
+        864
+      ],
+      "id": "3f725428-20ae-4b02-99f1-bb9308afe86e",
+      "name": "Send a message4",
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOutlookOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $('Limit2').item.json.ID_Prospect }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Action",
+              "fieldValue": "Séquence Finit"
+            },
+            {
+              "column": "Action",
+              "fieldValue": "Froid"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        864
+      ],
+      "id": "a900a051-aa78-48fc-b8a4-891420a1643c",
+      "name": "update pipeline4",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prospect = $(\"Limit2\").first().json;\n\n// Extraire prenom du decideur\nconst decideur = (prospect.Décideur || \"\").trim().split(/\\s+/)[0] || \"Madame, Monsieur\";\n\nconst html = `<div style=\"font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;max-width:650px;\">\n<p style=\"margin:0 0 14px 0;\">Bonjour {{decideur_prenom}},</p><p style=\"margin:0 0 14px 0;\">Je me permets de revenir vers vous avec une approche simple.</p><p style=\"margin:0 0 14px 0;\">Lorsque des besoins de recrutement sont en cours, il peut être utile d'avoir une solution complémentaire pour absorber l'activité, tester des profils ou sécuriser une organisation le temps qu'un poste soit durablement pourvu.</p><p style=\"margin:0 0 14px 0;\">L'objectif n'est pas de remplacer vos démarches actuelles de recrutement, mais de vous proposer une option supplémentaire lorsque le besoin est plus urgent, ponctuel ou difficile à couvrir rapidement.</p><p style=\"margin:0 0 14px 0;\">ACME Aviation peut intervenir dans cette logique : comme un appui opérationnel, mobilisable selon vos besoins.</p><p style=\"margin:0 0 14px 0;\">Si cela peut avoir un intérêt pour {{entreprise}}, je serais ravie d'en discuter brièvement avec vous.</p><p style=\"margin:0 0 14px 0;\">Bien cordialement,</p>\n<br><br>\n<!-- votre bloc de signature ici -->\n</div>`\n  .replace(/\\{\\{decideur_prenom\\}\\}/g, decideur)\n  .replace(/\\{\\{entreprise\\}\\}/g, prospect.Entreprise || \"\");\n\nreturn [{\n  json: {\n    to: prospect.Email,\n    subject: `Une solution complementaire a vos recrutements`,\n    html: html\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        864
+      ],
+      "id": "dcc63959-7687-47f4-a911-0ab65fe9f0fe",
+      "name": "Prepa J-"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "93f36189-e8f3-4dc6-9dfc-644a35afd03c",
+              "leftValue": "={{ $json.Statut }}",
+              "rightValue": "Nouveau",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b12a8885-d45a-4546-a146-521c17bc3d2b",
+              "leftValue": "={{ $json.Email_Statut }}",
+              "rightValue": "❌ Mauvais",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "f277c28f-0ec2-4c60-adbe-dd7d2f174d9b",
+              "leftValue": "={{ $json.Action }}",
+              "rightValue": "Stop",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "f56b2d36-af15-4051-a747-790758c8af26",
+              "leftValue": "={{ $json.Date_J0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "df7c36f5-6783-4668-8e76-d02400c1b13e",
+              "leftValue": "={{ $json.Action }}",
+              "rightValue": "Lancer séquence",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        416
+      ],
+      "id": "37129b0d-089a-44a8-bf8e-9b79bf1138c5",
+      "name": "Filter3"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */20 6-20 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -224,
+        416
+      ],
+      "id": "f3e8694a-2987-42c2-a0a5-cea4acb4937e",
+      "name": "Schedule Trigger3"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "options": {
+          "rawData": false
+        }
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        416
+      ],
+      "id": "2bbd67fc-251f-4711-957f-913c103bcd45",
+      "name": "Lire pipeline5",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toRecipients": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.html }}",
+        "additionalFields": {
+          "ccRecipients": "prenom.nom@exemple.fr",
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        896,
+        416
+      ],
+      "id": "19feaa34-3909-4e46-98c3-8c58569ae0dc",
+      "name": "Send a message5",
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOutlookOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "update",
+        "workbook": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "id"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "A_RENSEIGNER",
+          "mode": "list",
+          "cachedResultName": "votre-document"
+        },
+        "columnToMatchOn": "ID_Prospect",
+        "valueToMatchOn": "={{ $('Limit3').item.json.ID_Prospect }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Date_Ajout",
+              "fieldValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "column": "Statut",
+              "fieldValue": "Contacté"
+            },
+            {
+              "column": "Action",
+              "fieldValue": "Séquence en cours"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        416
+      ],
+      "id": "bd0bd38c-2b42-4b2e-b96f-424f40aa1649",
+      "name": "update pipeline5",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftExcelOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prospect = $(\"Limit3\").first().json;\n\n// Extraire prenom du decideur\nconst decideur = (prospect.Décideur || \"\").trim().split(/\\s+/)[0] || \"Madame, Monsieur\";\n\nconst html = `<div style=\"font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;max-width:650px;\">\n<p style=\"margin:0 0 14px 0;\">Bonjour {{decideur_prenom}},</p><p style=\"margin:0 0 14px 0;\">Je me permets de vous contacter car votre structure semble actuellement concernée par des besoins en recrutement ou en renfort sur des profils opérationnels.</p><p style=\"margin:0 0 14px 0;\">ACME Aviation, agence basée à Roissy-en-France, accompagne les entreprises dans leurs besoins en personnel temporaire, avec une attention particulière portée au sérieux du suivi, à la fiabilité des profils proposés et à la compréhension des contraintes terrain.</p><p style=\"margin:0 0 14px 0;\">Nous savons que certains besoins ne peuvent pas attendre, notamment lorsqu'ils concernent l'organisation d'une équipe ou la continuité d'un service. C'est pourquoi nous assurons également une astreinte 7j/7 et 24h/24.</p><p style=\"margin:0 0 14px 0;\">Je souhaitais savoir si vous étiez ouvert à un court échange afin de vous présenter notre fonctionnement et voir si ACME Aviation pourrait être utile à {{entreprise}}.</p><p style=\"margin:0 0 14px 0;\">Seriez-vous disponible cette semaine pour un appel rapide ?</p><p style=\"margin:0 0 14px 0;\">Bien cordialement,</p>\n<br><br>\n<!-- votre bloc de signature ici -->\n</div>`\n  .replace(/\\{\\{decideur_prenom\\}\\}/g, decideur)\n  .replace(/\\{\\{entreprise\\}\\}/g, prospect.Entreprise || \"\");\n\nreturn [{\n  json: {\n    to: prospect.Email,\n    subject: `Prise de contact professionnelle`,\n    html: html\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        416
+      ],
+      "id": "1ac16fe8-0fc0-4366-ab77-7ae63de43343",
+      "name": "Prep J-"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        448,
+        416
+      ],
+      "id": "db979ea1-11a4-489d-9f7e-b9c237ea1246",
+      "name": "Limit3"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Lire pipeline3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire pipeline3": {
+      "main": [
+        [
+          {
+            "node": "Filter1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter1": {
+      "main": [
+        [
+          {
+            "node": "Limit1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit1": {
+      "main": [
+        [
+          {
+            "node": "Prepa mail J-",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message3": {
+      "main": [
+        [
+          {
+            "node": "update pipeline3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepa mail J-": {
+      "main": [
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger2": {
+      "main": [
+        [
+          {
+            "node": "Lire pipeline4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire pipeline4": {
+      "main": [
+        [
+          {
+            "node": "Filter2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter2": {
+      "main": [
+        [
+          {
+            "node": "Limit2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit2": {
+      "main": [
+        [
+          {
+            "node": "Prepa J-",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message4": {
+      "main": [
+        [
+          {
+            "node": "update pipeline4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepa J-": {
+      "main": [
+        [
+          {
+            "node": "Send a message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter3": {
+      "main": [
+        [
+          {
+            "node": "Limit3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger3": {
+      "main": [
+        [
+          {
+            "node": "Lire pipeline5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire pipeline5": {
+      "main": [
+        [
+          {
+            "node": "Filter3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message5": {
+      "main": [
+        [
+          {
+            "node": "update pipeline5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep J-": {
+      "main": [
+        [
+          {
+            "node": "Send a message5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit3": {
+      "main": [
+        [
+          {
+            "node": "Prep J-",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "saveExecutionProgress": true
+  },
+  "tags": []
+}

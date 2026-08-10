@@ -1,5 +1,5 @@
 {
-  "name": "phone scraper ecriture asynchrone toute page cofondu",
+  "name": "Scraping asynchrone avec reprise",
   "active": false,
   "nodes": [
     {

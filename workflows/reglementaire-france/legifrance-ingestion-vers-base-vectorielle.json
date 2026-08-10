@@ -1,5 +1,5 @@
 {
-  "name": "LEGIFRANCE (ACME Aviation) — Ingestion Accords de branche intérim → Supabase",
+  "name": "Legifrance ingestion vers base vectorielle",
   "active": false,
   "nodes": [
     {

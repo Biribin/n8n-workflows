@@ -1,5 +1,5 @@
 {
-  "name": "Veille — OpenFisca QA (contre-calcul taux)",
+  "name": "Contre calcul sur source independante",
   "active": false,
   "nodes": [
     {

@@ -1,15 +1,15 @@
 # Workflows n8n
 
-Une partie de ma plateforme d'automatisation auto-hébergée : **213 workflows conçus, 109 actifs en production**. **49** sont publiés ici, en licence MIT, parce qu'ils sont réutilisables tels quels et qu'ils ne racontent rien de confidentiel. Le reste est décrit plus bas sans son JSON.
+**51 workflows n8n**, sortis d'une plateforme auto-hébergée que je fais tourner au quotidien, en licence MIT. Ils sont là parce qu'ils sont réutilisables tels quels.
 
-Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand du code est nécessaire je le fais produire par des agents puis je le recette. Ce qui est publié ici a tourné en vrai, pas dans un tutoriel.
+Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand du code est nécessaire je le fais produire par des agents puis je le recette. Tout ce qui est ici a tourné en vrai, pas dans un tutoriel.
 
-## Ce qui est publié
+## Les familles
 
 | Famille | Workflows | À quoi ça sert |
 |---|---:|---|
 | [Recherche d'emploi automatisée](workflows/recherche-emploi/) | 7 | Chaîne complète de candidature : découverte d'offres, rédaction adaptée, envoi, relance, lecture des réponses. Projet personnel, donc publiable en entier. |
-| [Prospection et génération de leads](workflows/prospection/) | 20 | Identification de prospects, enrichissement, déduplication et rédaction de messages personnalisés. Toutes les fiches contact ont été retirées : ce qui reste est la mécanique. |
+| [Prospection et génération de leads](workflows/prospection/) | 22 | Identification de prospects, enrichissement, déduplication et rédaction de messages personnalisés. Toutes les fiches contact ont été retirées : ce qui reste est la mécanique. |
 | [Exploitation de n8n](workflows/exploitation-n8n/) | 6 | Ce qu'il faut ajouter quand on passe de 5 workflows à 100 : capture d'erreur, relance de déploiement, suivi du coût des API, veille. |
 | [Réglementaire français](workflows/reglementaire-france/) | 5 | Surveillance de sources officielles (Légifrance, BOFiP, OpenFisca) pour détecter qu'un paramétrage est devenu faux avant que la paie ne parte. |
 | [IA appliquée](workflows/ia-appliquee/) | 5 | LLM branché sur du réel : réponses aux avis et commentaires, classement de documents, répartition de demandes. Toujours avec relecture humaine avant publication. |
@@ -30,6 +30,8 @@ Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand d
 
 - **[apollo-enrichissement-par-lots](workflows/prospection/apollo-enrichissement-par-lots.json)** Enrichissement d'une liste de contacts via l'API Apollo, par lots, avec reprise là où la boucle s'est arrêtée.
 - **[apollo-pipeline-de-leads](workflows/prospection/apollo-pipeline-de-leads.json)** Pipeline de génération de leads sur l'API Apollo : recherche d'organisations, recherche de personnes dans ces organisations, révélation de l'adresse professionnelle, puis écriture en feuille.
+- **[cold-outreach-avec-relances](workflows/prospection/cold-outreach-avec-relances.json)** Variante de la séquence de prise de contact avec relances échelonnées et sortie de séquence dès qu'une réponse arrive.
+- **[cold-outreach-cadence-et-plafond](workflows/prospection/cold-outreach-cadence-et-plafond.json)** Séquence de prise de contact à froid depuis une feuille : filtre sur l'étape en cours, plafond d'envois par exécution, envoi, puis mise à jour de l'étape.
 - **[dedoublonnage-multi-feuilles](workflows/prospection/dedoublonnage-multi-feuilles.json)** Construction d'une liste de dédoublonnage à partir de plusieurs feuilles à la fois, exposée en webhook pour être interrogée par les autres workflows.
 - **[dedoublonnage-par-segment-a](workflows/prospection/dedoublonnage-par-segment-a.json)** Déclinaison du dédoublonnage sur un segment précis.
 - **[dedoublonnage-par-segment-b](workflows/prospection/dedoublonnage-par-segment-b.json)** Deuxième déclinaison du dédoublonnage par segment.
@@ -86,27 +88,6 @@ Je travaille en no-code et low-code : je cadre le besoin, j'assemble, et quand d
 - **[purge-rgpd-mensuelle](workflows/conformite-rgpd/purge-rgpd-mensuelle.json)** Purge mensuelle des journaux au-delà de la durée de rétention déclarée.
 - **[purge-rgpd-quotidienne](workflows/conformite-rgpd/purge-rgpd-quotidienne.json)** Purge quotidienne des données transitoires.
 
-## Ce qui n'est pas publié, et pourquoi
-
-Le reste de la plateforme tourne sur les données d'un employeur et de personnes physiques : identités d'agents, badges aéroportuaires, bulletins de paie, déclarations sociales. Publier ces workflows exposerait l'architecture interne d'une entreprise et des données personnelles, même anonymisés. Ils restent privés.
-
-Voici quand même de quoi il s'agit. **Le détail, les captures et une démonstration commentée sont disponibles sur demande en entretien.**
-
-| Famille | Workflows | Dont actifs | À quoi ça sert |
-|---|---:|---:|---|
-| Temps de travail et émargement | 39 | 21 | Réconciliation entre planning prévisionnel, pointage badgeuse et relevé client, calcul des heures et des majorations de nuit. |
-| Référentiels RH | 28 | 11 | Synchronisation et contrôle des référentiels agents : identité, badges aéroportuaires, habilitations, formations, absences. |
-| Bac à sable | 19 | 5 | Essais, sondes de débogage, copies de travail. Gardés pour l'historique, sans valeur de démonstration. |
-| Courriel, OCR et ingestion documentaire | 18 | 7 | Lecture de boîtes Outlook multiples, extraction des pièces jointes, OCR par LLM, résolution d'identité avec table d'exceptions apprise. |
-| Paie et déclaratif social | 17 | 15 | DSN, DPAE, prélèvement à la source, cotisations, acomptes, facturation mensuelle. |
-| Serveurs MCP sur le SI | 15 | 13 | Exposition du SI RH à un assistant conversationnel : identité, badges, compétences, formations, émargement, planning, avec cache. |
-| Contrats et signature | 7 | 2 | Génération, envoi en signature électronique et suivi des contrats. |
-| Tableaux de bord et rapports | 7 | 6 | Agrégation de données de production vers des tableaux de bord et des rapports périodiques. |
-| Sites et formulaires | 5 | 4 | Formulaires de contact et de candidature, pages servies directement par n8n. |
-| Exploitation de n8n | 4 | 3 | Sous-workflows internes et rejeux de journaux propres à mon instance. |
-| Recherche d'emploi automatisée | 2 | 1 | Variantes de travail et version monolithique antérieure au découpage en quatre workflows. |
-| Veille réglementaire | 1 | 0 | Sondes de veille encore attachées à des sources internes. |
-
 ## Importer un workflow
 
 ```
@@ -121,7 +102,7 @@ Puis, dans l'ordre :
 4. **Créer les data tables et les tables Postgres** que le workflow attend. Les noms sont conservés.
 5. Les hôtes internes sont remplacés par `exemple.internal` : mettez les vôtres.
 
-Les workflows sont livrés **inactifs**. Lisez-les avant de les activer, surtout ceux qui envoient des courriels.
+Les workflows sont livrés **désactivés**. Lisez-les avant de les mettre en route, surtout ceux qui envoient des courriels.
 
 ## Ce que vous ne trouverez pas ici
 

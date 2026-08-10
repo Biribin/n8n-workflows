@@ -1,5 +1,5 @@
 {
-  "name": "Pipeline - Liste dedoublonnage acme (lecture) claude",
+  "name": "Dedoublonnage multi feuilles",
   "active": false,
   "nodes": [
     {

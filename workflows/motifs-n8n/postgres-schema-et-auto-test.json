@@ -1,5 +1,5 @@
 {
-  "name": "career-ops : schéma Postgres + auto-test",
+  "name": "Postgres schema et auto test",
   "active": false,
   "nodes": [
     {

@@ -1,5 +1,5 @@
 {
-  "name": "scrapper aéroportuaire google jobs",
+  "name": "Veille offres avec scoring llm",
   "active": false,
   "nodes": [
     {

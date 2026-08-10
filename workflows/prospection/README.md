@@ -20,6 +20,24 @@ Pipeline de génération de leads sur l'API Apollo : recherche d'organisations, 
 - 48 nœuds
 - Briques : HTTP, formTrigger, Code (JS), IF, boucle par lots, Google Sheets, Merge
 
+## cold-outreach-avec-relances
+
+Variante de la séquence de prise de contact avec relances échelonnées et sortie de séquence dès qu'une réponse arrive.
+
+- Fichier : [`cold-outreach-avec-relances.json`](cold-outreach-avec-relances.json)
+- Déclencheur : planification (cron)
+- 24 nœuds
+- Briques : scheduleTrigger, microsoftExcel, Outlook, limite, Code (JS), filter
+
+## cold-outreach-cadence-et-plafond
+
+Séquence de prise de contact à froid depuis une feuille : filtre sur l'étape en cours, plafond d'envois par exécution, envoi, puis mise à jour de l'étape. Le plafond est le point important : il évite de brûler une base entière sur un bug.
+
+- Fichier : [`cold-outreach-cadence-et-plafond.json`](cold-outreach-cadence-et-plafond.json)
+- Déclencheur : planification (cron)
+- 21 nœuds
+- Briques : scheduleTrigger, microsoftExcel, filter, limite, Outlook, Code (JS)
+
 ## dedoublonnage-multi-feuilles
 
 Construction d'une liste de dédoublonnage à partir de plusieurs feuilles à la fois, exposée en webhook pour être interrogée par les autres workflows. Le motif « une seule source de vérité pour savoir si on a déjà contacté quelqu'un ».

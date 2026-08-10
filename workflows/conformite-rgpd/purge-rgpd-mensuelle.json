@@ -1,5 +1,5 @@
 {
-  "name": "acme — Purge mensuelle (journaux au-delà de la rétention RGPD)",
+  "name": "Purge rgpd mensuelle",
   "active": false,
   "nodes": [
     {
