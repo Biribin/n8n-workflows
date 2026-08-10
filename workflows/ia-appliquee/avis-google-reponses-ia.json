@@ -1,0 +1,339 @@
+{
+  "name": "Avis Google + Réponses IA",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "var data = $input.first().json;\nvar reviews = data.reviews || [];\nvar count = data.count || 0;\n\nreturn reviews.map(function(r) {\n  return { json: { ...r, total_count: count } };\n});"
+      },
+      "name": "🔀 Éclater les avis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        512
+      ],
+      "id": "caae3e49-8dfc-4107-b2f3-e74dbab5a4ac"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "⏳ Traiter 1 par 1",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        512
+      ],
+      "id": "10c3df7b-2802-4270-b595-b2ced1b2d709"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://claude.ai/chat/00000000-0000-0000-0000-000000000000",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 300,\n  \"system\": \"Tu es le community manager de acme Intérim, agence d'intérim spécialisée dans l'aéroportuaire (CDG et Orly). Tu rédiges des réponses aux avis Google Maps.\\n\\nRÈGLES :\\n- Réponds en français, ton professionnel et chaleureux\\n- 2-4 phrases maximum\\n- Commence toujours par remercier la personne par son prénom\\n- Si avis positif (4-5 étoiles) : remercie, valorise la collaboration, invite à recommander\\n- Si avis mitigé (3 étoiles) : remercie, reconnaît les points à améliorer, propose un contact direct\\n- Si avis négatif (1-2 étoiles) : reste calme et empathique, ne te justifie pas excessivement, propose de résoudre en privé (email ou téléphone)\\n- Ne donne JAMAIS d'informations internes ou confidentielles\\n- Signe : L'équipe acme Intérim\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Avis Google de {{ $json.nom }} — Note : {{ $json.note }}/5\\nCommentaire : \\\"{{ $json.commentaire }}\\\"\\n\\nGénère une réponse appropriée. Réponds UNIQUEMENT avec le texte de la réponse, rien d'autre.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "🧠 Claude AI — Réponse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1328,
+        736
+      ],
+      "id": "c6c18708-b4d2-4d27-a36a-ef82ff779b39"
+    },
+    {
+      "parameters": {
+        "jsCode": "var claudeData = $input.first().json;\nvar reply = '';\ntry {\n  reply = claudeData.content[0].text.trim();\n} catch(e) {\n  reply = 'Merci pour votre retour. N\\'hésitez pas à nous contacter directement pour en discuter. — L\\'équipe acme Intérim';\n}\n\nvar batchNode = $('⏳ Traiter 1 par 1');\nvar original = batchNode.first().json;\n\nreturn [{\n  json: {\n    nom: original.nom,\n    note: original.note,\n    commentaire: original.commentaire,\n    iso_date: original.iso_date,\n    review_link: original.review_link || '',\n    total_count: original.total_count,\n    reponse_ia: reply\n  }\n}];"
+      },
+      "name": "✏️ Extraire Réponse IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        736
+      ],
+      "id": "116822ca-5e4e-42fb-a999-8f52f7f906cb"
+    },
+    {
+      "parameters": {
+        "jsCode": "var items = $input.all();\nvar count = items.length;\n\nvar rows = '';\nfor (var i = 0; i < items.length; i++) {\n  var r = items[i].json;\n  var bg = (i % 2 === 0) ? '#f9f9f9' : '#ffffff';\n  var commentaire = r.commentaire || '-';\n  var reponse = r.reponse_ia || '-';\n  \n  var noteColor = '#333';\n  if (r.note >= 4) noteColor = '#059669';\n  else if (r.note >= 3) noteColor = '#d97706';\n  else noteColor = '#dc2626';\n  \n  var stars = '';\n  for (var s = 0; s < 5; s++) {\n    stars += s < r.note ? '★' : '☆';\n  }\n\n  rows += '<tr style=\"background-color:' + bg + ';\">';\n  rows += '<td colspan=\"3\" style=\"padding:16px 12px 8px;border-top:2px solid #e0e0e0;\">';\n  rows += '<strong style=\"font-size:15px;\">' + r.nom + '</strong>';\n  rows += ' — <span style=\"color:' + noteColor + ';font-weight:bold;font-size:15px;\">' + stars + ' ' + r.note + '/5</span>';\n  rows += '</td></tr>';\n  \n  rows += '<tr style=\"background-color:' + bg + ';\">';\n  rows += '<td colspan=\"3\" style=\"padding:4px 12px 12px;font-size:14px;color:#333;\">';\n  rows += '💬 <em>\"' + commentaire + '\"</em>';\n  rows += '</td></tr>';\n  \n  rows += '<tr style=\"background-color:#eef6ff;\">';\n  rows += '<td colspan=\"3\" style=\"padding:12px;font-size:14px;border-left:4px solid #0066cc;\">';\n  rows += '<strong style=\"color:#0066cc;\">🤖 Réponse suggérée par Claude :</strong><br><br>';\n  rows += '<span style=\"color:#333;line-height:1.6;\">' + reponse + '</span><br><br>';\n  rows += '<span style=\"font-size:12px;color:#888;\">👆 Copie cette réponse et colle-la sur Google Maps → ';\n  rows += '<a href=\"https://www.google.com/maps/place/?q=place_id:ChIJBQiyk2135kcRdCiq5VD7YRs\" style=\"color:#0066cc;\">Ouvrir Google Maps</a>';\n  rows += '</span>';\n  rows += '</td></tr>';\n  \n  rows += '<tr><td colspan=\"3\" style=\"height:8px;\"></td></tr>';\n}\n\nvar html = '<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-family:Arial,sans-serif;max-width:700px;\">';\nhtml += '<tr><td style=\"padding:20px;background:linear-gradient(135deg,#0044aa,#0088ff);border-radius:8px 8px 0 0;\">';\nhtml += '<span style=\"font-size:20px;font-weight:bold;color:#ffffff;\">✈️ ' + count + ' nouvel(s) avis Google — acme Intérim</span><br>';\nhtml += '<span style=\"font-size:13px;color:#cce0ff;\">Avis détectés cette semaine • Réponses IA pré-rédigées ci-dessous</span>';\nhtml += '</td></tr>';\nhtml += '<tr><td style=\"padding:12px 0;\">';\nhtml += '<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-family:Arial,sans-serif;max-width:700px;border-collapse:collapse;\">';\nhtml += rows;\nhtml += '</table>';\nhtml += '</td></tr>';\nhtml += '<tr><td style=\"padding:16px;background:#f0f0f0;border-radius:0 0 8px 8px;font-size:12px;color:#666;text-align:center;\">';\nhtml += '🔗 <a href=\"https://www.google.com/maps/place/?q=place_id:ChIJBQiyk2135kcRdCiq5VD7YRs\" style=\"color:#0066cc;\">Voir tous les avis sur Google Maps</a>';\nhtml += ' • Les réponses sont générées par IA — vérifie avant de publier !';\nhtml += '</td></tr></table>';\n\nreturn [{ json: { subject: '✈️ ' + count + ' nouvel(s) avis Google + réponses IA — acme Intérim', body: html } }];"
+      },
+      "name": "📧 Formater Email + Réponses IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        528
+      ],
+      "executeOnce": true,
+      "id": "4f39fe80-285e-4d62-9c0f-e20c415cb72d"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 14 * * 5"
+            }
+          ]
+        }
+      },
+      "name": "Chaque vendredi 14h1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        576
+      ],
+      "id": "63694b1a-511f-4996-b54d-cce09750602b"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json?engine=google_maps_reviews&place_id=ChIJBQiyk2135kcRdCiq5VD7YRs&api_key=REMPLACER&sort_by=newestFirst&hl=fr",
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "name": "SerpAPI Avis Google1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        576
+      ],
+      "id": "39c32152-5f6a-4cfc-b2be-4e83017ca313"
+    },
+    {
+      "parameters": {
+        "jsCode": "var data = $input.first().json;\nvar reviews = data.reviews || [];\n\nvar now = new Date();\nvar sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nvar staticData = $getWorkflowStaticData('global');\nvar lastSeenDate = staticData.lastSeenDate || '';\n\nvar newReviews = [];\n\nfor (var i = 0; i < reviews.length; i++) {\n  var r = reviews[i];\n  var isoDate = r.iso_date_of_last_edit || r.iso_date || '';\n  if (isoDate) {\n    var reviewDate = new Date(isoDate);\n    if (reviewDate < sevenDaysAgo) { break; }\n  }\n  if (lastSeenDate && isoDate <= lastSeenDate) { break; }\n\n  var userName = 'Anonyme';\n  if (r.user && r.user.name) { userName = r.user.name; }\n  newReviews.push({\n    nom: userName,\n    note: r.rating || 0,\n    commentaire: r.snippet || '',\n    iso_date: isoDate,\n    review_link: r.review_link || ''\n  });\n}\n\nif (reviews.length > 0) {\n  var latest = reviews[0];\n  staticData.lastSeenDate = latest.iso_date_of_last_edit || latest.iso_date || '';\n}\n\nif (newReviews.length === 0) {\n  return [{ json: { hasNew: false, count: 0, reviews: [] } }];\n}\nreturn [{ json: { hasNew: true, count: newReviews.length, reviews: newReviews } }];"
+      },
+      "name": "Filtrer Avis Semaine1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        576
+      ],
+      "id": "51f16cea-f171-4a78-8a64-ba386177e5e6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasNew }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Nouveaux avis ?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        576
+      ],
+      "id": "d436c1b8-c2a0-4aee-82d7-d5cbf8870412"
+    },
+    {
+      "parameters": {
+        "toRecipients": "prenom.nom@exemple.fr",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.body }}",
+        "additionalFields": {}
+      },
+      "name": "Envoyer Notification1",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        528
+      ],
+      "id": "6059bac8-159f-4fa1-bc80-3a7e58b75677",
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOutlookOAuth2Api (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Pas de nouveaux avis1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        656
+      ],
+      "id": "066c94d4-caf5-46a2-bb30-2a528a931b07"
+    }
+  ],
+  "connections": {
+    "🔀 Éclater les avis": {
+      "main": [
+        [
+          {
+            "node": "⏳ Traiter 1 par 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Traiter 1 par 1": {
+      "main": [
+        [
+          {
+            "node": "🧠 Claude AI — Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Formater Email + Réponses IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Claude AI — Réponse": {
+      "main": [
+        [
+          {
+            "node": "✏️ Extraire Réponse IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ Extraire Réponse IA": {
+      "main": [
+        [
+          {
+            "node": "⏳ Traiter 1 par 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Formater Email + Réponses IA": {
+      "main": [
+        [
+          {
+            "node": "Envoyer Notification1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chaque vendredi 14h1": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI Avis Google1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI Avis Google1": {
+      "main": [
+        [
+          {
+            "node": "Filtrer Avis Semaine1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrer Avis Semaine1": {
+      "main": [
+        [
+          {
+            "node": "Nouveaux avis ?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nouveaux avis ?1": {
+      "main": [
+        [
+          {
+            "node": "🔀 Éclater les avis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pas de nouveaux avis1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pas de nouveaux avis1": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

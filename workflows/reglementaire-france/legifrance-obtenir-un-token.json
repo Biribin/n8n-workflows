@@ -1,0 +1,217 @@
+{
+  "name": "LEGIFRANCE — AUTH Get Token",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "120b5cb4-5403-4556-95e0-a1b2263db7c6",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vérifier si le token en cache est encore valide\nconst staticData = $getWorkflowStaticData('global');\nconst now = Date.now();\n\nif (staticData.access_token && staticData.expires_at && now < staticData.expires_at) {\n  return [{\n    json: {\n      access_token: staticData.access_token,\n      cached: true,\n      expires_at: new Date(staticData.expires_at).toISOString()\n    }\n  }];\n}\n\n// Token absent ou expiré → continuer vers la requête OAuth\nreturn [{ json: { cached: false, reason: 'Token absent ou expiré' } }];"
+      },
+      "id": "e2168e8b-0e04-44a2-9564-423f304e70dd",
+      "name": "Check Cache",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.cached }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "01c72e6b-07e8-47c3-8ad7-f96adb821148",
+      "name": "Token en cache?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PISTE_TOKEN_URL || 'https://sandbox-oauth.piste.gouv.fr/api/oauth/token' }}",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $env.PISTE_CLIENT_ID }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $env.PISTE_CLIENT_SECRET }}"
+            },
+            {
+              "name": "scope",
+              "value": "openid"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "fd027500-7042-4f71-846b-58bc089b3867",
+      "name": "POST OAuth Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        2144
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ ($json.statusCode || 0) === 200 }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2305e614-54a0-405a-baf9-2b851af72957",
+      "name": "Token OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        960,
+        2144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stocker le token dans les static data du workflow\nconst staticData = $getWorkflowStaticData('global');\nconst tokenData = $input.first().json.body || $input.first().json;\n\nstaticData.access_token = tokenData.access_token;\nstaticData.token_type = tokenData.token_type || 'Bearer';\nstaticData.expires_at = Date.now() + (tokenData.expires_in * 1000) - 60000; // -60s marge\nstaticData.obtained_at = new Date().toISOString();\n\nreturn [{\n  json: {\n    access_token: staticData.access_token,\n    cached: false,\n    expires_at: new Date(staticData.expires_at).toISOString()\n  }\n}];"
+      },
+      "id": "b58013bb-5233-49a8-807a-0bdcfd5aaa0a",
+      "name": "Store Token (Static Data)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json;\nconst msg = `OAuth token request failed: ${JSON.stringify(error).substring(0, 500)}`;\nconsole.error(msg);\nthrow new Error(msg);"
+      },
+      "id": "3a2e4a57-d92b-4d6b-8b99-5ca7506085cc",
+      "name": "Log Error & Throw",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        2256
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Check Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Cache": {
+      "main": [
+        [
+          {
+            "node": "Token en cache?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token en cache?": {
+      "main": [
+        [
+          {
+            "node": "Store Token (Static Data)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST OAuth Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST OAuth Token": {
+      "main": [
+        [
+          {
+            "node": "Token OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token OK?": {
+      "main": [
+        [
+          {
+            "node": "Store Token (Static Data)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error & Throw",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}

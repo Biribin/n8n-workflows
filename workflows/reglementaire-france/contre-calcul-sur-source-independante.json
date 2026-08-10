@@ -1,0 +1,95 @@
+{
+  "name": "Veille — OpenFisca QA (contre-calcul taux)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 5 * *"
+            }
+          ]
+        }
+      },
+      "id": "c250ed70-9c62-4fd3-8830-f09b33fe0977",
+      "name": "Schedule mensuel (5 du mois 9h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Contre-calcul QA : lit les taux nationaux sur mon-entreprise URSSAF (source\n// indépendante de la page URSSAF WF-S4) et construit des signaux de veille.\n// NB: smic.horaire RETIRÉ (2026-06-30) — mon-entreprise renvoie 12,02 € et n'intègre\n// pas la revalorisation infra-annuelle (SMIC courant 12,31 € depuis le décret 14/06/2026)\n// → comparé à smic.horaire_brut (courant) il créerait un FAUX signal. Le SMIC est couvert\n// par WF-S3 (INSEE BDM, source autoritaire). On garde 9 taux nationaux-fixes fiables.\nconst RULES = [\n  { paramKey: 'cotisations.vieillesse_plaf_pat',   rule: 'salarié . cotisations . vieillesse . employeur . plafonnée . taux' },\n  { paramKey: 'cotisations.vieillesse_plaf_sal',   rule: 'salarié . cotisations . vieillesse . salarié . plafonnée . taux' },\n  { paramKey: 'cotisations.vieillesse_deplaf_pat', rule: 'salarié . cotisations . vieillesse . employeur . déplafonnée . taux' },\n  { paramKey: 'cotisations.vieillesse_deplaf_sal', rule: 'salarié . cotisations . vieillesse . salarié . déplafonnée . taux' },\n  { paramKey: 'cotisations.chomage_pat',           rule: 'salarié . cotisations . chômage . taux' },\n  { paramKey: 'cotisations.csg_deductible',        rule: 'salarié . cotisations . CSG-CRDS . CSG . déductible . taux' },\n  { paramKey: 'cotisations.crds',                  rule: 'salarié . cotisations . CSG-CRDS . CRDS . taux' },\n  { paramKey: 'cotisations.apprentissage_solde',   rule: \"salarié . cotisations . taxe d'apprentissage . solde\" },\n  { paramKey: 'plafonds.pmss',                     rule: 'plafond sécurité sociale', isEuro: true },\n];\nfunction targetYM() { const d = new Date(); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1 }; }\nfunction condSatisfied(si, t) {\n  const m = String(si).match(/(\\d{1,2})\\/(\\d{4})/);\n  if (!m) return false;\n  const bm = Number(m[1]), by = Number(m[2]);\n  return t.y > by || (t.y === by && t.m >= bm);\n}\nfunction resolveScalar(rawNode, t) {\n  if (rawNode == null) return null;\n  if (typeof rawNode === 'string' || typeof rawNode === 'number') return rawNode;\n  if (rawNode.valeur != null) return rawNode.valeur;\n  if (Array.isArray(rawNode.produit)) return rawNode.produit[rawNode.produit.length - 1];\n  if (Array.isArray(rawNode.variations)) {\n    for (const v of rawNode.variations) {\n      if (v && 'sinon' in v) return v.sinon;\n      if (v && v.si != null && condSatisfied(v.si, t)) return v.alors;\n    }\n    const last = rawNode.variations.find((v) => v && 'sinon' in v);\n    return last ? last.sinon : null;\n  }\n  return null;\n}\nfunction normalize(scalar, isEuro) {\n  if (scalar == null) return null;\n  const s = String(scalar).trim();\n  if (isEuro) { const n = Number(s.replace(/[^\\d.,-]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : null; }\n  if (s.includes('%')) { const n = Number(s.replace('%', '').replace(',', '.').trim()); return Number.isFinite(n) ? n / 100 : null; }\n  const n = Number(s.replace(',', '.'));\n  return Number.isFinite(n) ? n : null;\n}\nconst t = targetYM();\nconst base = 'https://mon-entreprise.urssaf.fr/api/v1/rules/';\nconst signals = [];\nfor (const r of RULES) {\n  try {\n    const resp = await this.helpers.httpRequest({ method: 'GET', url: base + encodeURIComponent(r.rule), json: true, headers: { 'User-Agent': 'acme' } });\n    const scalar = resolveScalar(resp && resp.rawNode ? resp.rawNode : resp, t);\n    const val = normalize(scalar, r.isEuro);\n    if (val == null || val <= 0) continue;\n    if (!r.isEuro && val > 0.5) continue;\n    signals.push({\n      sourceKey: 'openfisca_mon_entreprise',\n      paramKey: r.paramKey,\n      valeurProposee: r.isEuro ? val.toFixed(2) : val.toFixed(5),\n      dateEffet: t.y + '-01-01',\n      urlSource: base + encodeURIComponent(r.rule),\n      extrait: r.paramKey + ' = ' + scalar + ' (mon-entreprise URSSAF, contre-calcul QA)',\n      confiance: 0.95,\n    });\n  } catch (e) { /* règle en échec : on saute, pas de signal */ }\n  await new Promise((res) => setTimeout(res, 1500));\n}\nreturn [{ json: { ran: true, emitted: signals.length, signals } }];"
+      },
+      "id": "24fab9e1-3c91-438d-aff5-ce6ce6059a69",
+      "name": "OpenFisca QA — fetch + parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.signals) }}",
+        "options": {}
+      },
+      "id": "60d3ec67-f87f-4869-8cd7-4e9cf5ba1e12",
+      "name": "POST /api/veille/signal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule mensuel (5 du mois 9h)": {
+      "main": [
+        [
+          {
+            "node": "OpenFisca QA — fetch + parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenFisca QA — fetch + parse": {
+      "main": [
+        [
+          {
+            "node": "POST /api/veille/signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

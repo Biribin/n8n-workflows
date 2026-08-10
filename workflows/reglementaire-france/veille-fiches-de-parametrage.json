@@ -1,0 +1,74 @@
+{
+  "name": "Veille — FPOC poll (fiches paramétrage OC)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 6 * *"
+            }
+          ]
+        }
+      },
+      "id": "5edb19b0-925a-44ea-9679-b5739bf383da",
+      "name": "Schedule mensuel FPOC (6 du mois 8h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -352,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/dsn/fpoc/poll",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {}
+      },
+      "id": "f27ca9ca-fd0d-4b75-9084-d66fe15d477b",
+      "name": "POST /api/dsn/fpoc/poll",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -112,
+        -96
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule mensuel FPOC (6 du mois 8h)": {
+      "main": [
+        [
+          {
+            "node": "POST /api/dsn/fpoc/poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

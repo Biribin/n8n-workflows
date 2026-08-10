@@ -1,0 +1,1177 @@
+{
+  "name": "Veille - S11 Bareme PAS (BOFiP)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://open.urssaf.fr/api/explore/v2.1/catalog/datasets/table_taux_vmrr/records",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "where",
+              "value": "code_commune in (\"94065\")"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "order_by",
+              "value": "date_debut desc"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "id": "f29b3861-f152-40e8-876e-99de92427cf9",
+      "name": "HTTP Request GET URSSAF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        -1296
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// VM acme = établissement UNIQUE Rungis (94065). Règle ETT : rattachement RUP.\n// Robuste : accepte l'enveloppe Opendatasoft ({results:[...]}) OU des items déjà splittés.\nconst rows = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (Array.isArray(j.results)) rows.push(...j.results);  // enveloppe API\n  else rows.push(j);                                       // déjà splitté\n}\n\nconst out = [];\nfor (const r of rows) {\n  if (r.code_commune !== '94065') continue;     // Rungis seulement\n  if (r.date_fin) continue;                      // ligne EN COURS (date_fin null)\n  const taux = Number(r.taux_vm);                // pourcentage (3.2)\n  if (!Number.isFinite(taux)) continue;\n  const fraction = taux / 100;                   // engine attend une FRACTION (0.032)\n  const d = String(r.date_debut || '');          // \"20240201\"\n  const dateEffet = /^\\d{8}$/.test(d) ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}` : null;\n\n  out.push({ json: {\n    sourceKey: 'urssaf_vm',\n    paramKey: 'vm.94065',\n    tauxJsonPath: 'versement_mobilite.taux_standard',\n    valeurProposee: String(fraction),            // \"0.032\"\n    dateEffet,                                    // \"2024-02-01\"\n    urlSource: 'https://open.urssaf.fr/api/explore/v2.1/catalog/datasets/table_taux_vmrr/records?where=code_commune%3D%2294065%22',\n    extrait: `RUNGIS (94065) — VM ${taux}% (${fraction}) effet ${dateEffet}`,\n    confiance: 1.0,\n  }});\n}\nreturn out;\n"
+      },
+      "id": "b1f218fd-9cc2-4d5e-ae85-62bfca558c65",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -1296
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "55b2c052-7e31-4a60-8d90-62863d57bde4",
+      "name": "POST veille signal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -1296
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 1 1,7 *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 6 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "03594b0f-911c-4107-93a8-6babf299f3ab",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -1296
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000822484?lastNObservations=1",
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "id": "af721671-29c4-46aa-9006-6dccf76d6190",
+      "name": "HTTP Request GET BDM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        -1072
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 5 * *"
+            }
+          ]
+        }
+      },
+      "id": "07395183-3daf-4098-8329-e22f4a9c7acd",
+      "name": "Schedule Trigger3",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -1072
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $input.first().json;\n\n// descendre jusqu'à la série, puis aux observations\nconst ds = root['message:StructureSpecificData']?.['message:DataSet'] ?? root['message:DataSet'];\nlet series = ds['Series'];\nseries = Array.isArray(series) ? series[0] : series;   // 1 seule série ici\nlet obs = series['Obs'];\nobs = Array.isArray(obs) ? obs : [obs];                // lastNObservations=1 → objet unique\n\n// lit un attribut qu'il soit à plat OU sous \"$\" (selon config du nœud XML)\nconst attr = (o, k) => o?.[k] ?? o?.['$']?.[k];\n\n// garder la plus récente par période\nconst last = obs.slice().sort((a, b) =>\n  String(attr(b, 'TIME_PERIOD')).localeCompare(String(attr(a, 'TIME_PERIOD'))))[0];\n\nconst valeur  = attr(last, 'OBS_VALUE');     // \"12.31\"\nconst periode = attr(last, 'TIME_PERIOD');   // \"2026-06\"\n\nreturn [{ json: {\n  sourceKey: 'insee_smic',\n  paramKey: 'smic.horaire',\n  tauxJsonPath: 'smic.horaire_brut',\n  valeurProposee: String(valeur).replace(',', '.'),\n  dateEffet: periode ? `${periode}-01` : null,   // \"2026-06\" → \"2026-06-01\"\n  urlSource: 'https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000822484',\n  extrait: `SMIC horaire INSEE ${valeur} € (période ${periode})`,\n  confiance: 1.0,\n}}];\n"
+      },
+      "id": "84dde657-e5f4-4d34-81a2-69bf2603200c",
+      "name": "Code2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -1072
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e714dad6-be42-460f-a1ad-046b158fbf62",
+      "name": "POST veille/signal1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        128,
+        -1072
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        -1072
+      ],
+      "id": "53e99389-a4cf-436c-bcb0-9e2435d7be89",
+      "name": "XML"
+    },
+    {
+      "parameters": {
+        "url": "https://bofip.impots.gouv.fr/bofip/11255-PGP.html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,*/*"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "b65971de-35a4-43ce-ae6e-8aabdf0ebc75",
+      "name": "HTTP GET BOFiP PAS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        -848
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// S11 v2 (2026-07-22) — parse la GRILLE taux neutre métropole + l'ABATTEMENT\n// contrats courts depuis la page BOFiP BOI-BAREME-000037, et émet 2 signaux\n// veille MAPPÉS (plus informatifs) : pas.bareme_metropole (grille JSON) +\n// pas.abattement_interim (nombre). Le taux PERSO PAS vient de la DSN (CRM 94) ;\n// la grille neutre et l'abattement, eux, n'ont AUCUN flux DGFiP → cette veille.\nconst html = String($input.first().json.data || $input.first().json.body || '');\nconst out = [];\nconst clean = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/ | /g, ' ').replace(/\\s+/g, ' ').trim();\n\n// Version en vigueur (identifiant BOI le plus récent présent sur la page).\nconst dates = [...html.matchAll(/BOI-BAREME-000037-(\\d{8})/g)].map((m) => m[1]).sort();\nconst ver = dates.length ? `BOI-BAREME-000037-${dates[dates.length - 1]}` : 'BOI-BAREME-000037';\nconst urlSource = 'https://bofip.impots.gouv.fr/bofip/11255-PGP.html';\n\n// ── 1. Grille MÉTROPOLE : 1re <table> dont le caption contient \"métropole\" ──\nconst tables = html.match(/<table[\\s\\S]*?<\\/table>/gi) || [];\nconst metro = tables.find((t) => /m[ée]tropole/i.test((t.match(/<caption[^>]*>([\\s\\S]*?)<\\/caption>/i) || [])[1] || ''));\nlet grille = null;\nif (metro) {\n  const rows = [];\n  for (const tr of metro.match(/<tr[\\s\\S]*?<\\/tr>/gi) || []) {\n    const tds = [...tr.matchAll(/<td[\\s\\S]*?<\\/td>/gi)].map((m) => m[0]);\n    if (tds.length < 2) continue; // ligne d'en-tête (th) ignorée\n    const libelle = clean(tds[0]);\n    const taux = Number(clean(tds[1]).replace(/[^\\d,\\.]/g, '').replace(',', '.'));\n    if (!Number.isFinite(taux)) continue;\n    // Borne SUP exclue : \"inférieure à X\" (1re) ou \"...et inférieure à X\" ; dernière tranche = pas de borne → 9999999.\n    const inf = libelle.match(/inf[ée]rieure à ([\\d ]+)/i);\n    const borne = inf ? Number(inf[1].replace(/\\s/g, '')) : 9999999;\n    rows.push([borne, taux]);\n  }\n  // Garde-fous anti-parsing cassé : 20 tranches, 1re borne plausible (SMIC~), dernière = 9999999/43.\n  const ok = rows.length === 20 && rows[0][0] >= 1500 && rows[0][0] <= 1800 && rows[0][1] === 0 && rows[rows.length - 1][0] === 9999999 && rows[rows.length - 1][1] === 43;\n  if (ok) grille = rows;\n}\nif (grille) {\n  out.push({ json: {\n    sourceKey: 'bofip_pas_bareme',\n    paramKey: 'pas.bareme_metropole',\n    tauxJsonPath: 'pas.bareme_metropole',\n    valeurProposee: JSON.stringify(grille),\n    dateEffet: '2026-05-01',\n    urlSource,\n    extrait: `Grille taux neutre métropole (${grille.length} tranches) — ${ver}`,\n    confiance: 1.0,\n  } });\n}\n\n// ── 2. Abattement contrats courts (CGI 204 H III bis, indexé SMIC) ──────────\nconst txt = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/ | /g, ' ');\nconst abM = txt.match(/abattement applicable aux contrats courts[^.]*?[ée]gal à\\s*([\\d ]+)\\s*euros/i);\nif (abM) {\n  const abatt = Number(abM[1].replace(/\\s/g, ''));\n  const dEffetJuin = /1\\s*er\\s+juin\\s+2026/i.test(txt);\n  if (Number.isFinite(abatt) && abatt >= 500 && abatt <= 2000) {\n    out.push({ json: {\n      sourceKey: 'bofip_pas_bareme',\n      paramKey: 'pas.abattement_interim',\n      tauxJsonPath: 'pas.abattement_interim_mensuel',\n      valeurProposee: String(abatt),\n      dateEffet: dEffetJuin ? '2026-06-01' : null,\n      urlSource,\n      extrait: `Abattement contrats courts (CGI 204 H III bis) = ${abatt} € — ${ver}`,\n      confiance: 1.0,\n    } });\n  }\n}\n\n// Fallback : si le parsing échoue TOTALEMENT (page BOFiP restructurée), on émet\n// le signal informatif legacy (version) pour ne pas perdre l'alerte de changement.\nif (out.length === 0 && dates.length) {\n  out.push({ json: {\n    sourceKey: 'bofip_pas_bareme',\n    paramKey: 'pas.bareme_taux_neutre',\n    tauxJsonPath: '',\n    valeurProposee: ver,\n    dateEffet: `${dates[dates.length - 1].slice(0, 4)}-${dates[dates.length - 1].slice(4, 6)}-${dates[dates.length - 1].slice(6, 8)}`,\n    urlSource,\n    extrait: `⚠️ Parsing grille/abattement KO (structure BOFiP ?) — version en vigueur ${ver} à vérifier manuellement`,\n    confiance: 0.5,\n  } });\n}\n\nreturn out;"
+      },
+      "id": "0daf286b-691c-4b90-977a-f74640bd4f8a",
+      "name": "Code - version bareme",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -848
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "572f5f2d-d0f6-4987-af60-83b0586f239a",
+      "name": "POST veille/signal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -848
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1cc49282-0cab-4f84-9f17-264b3d1142e3",
+      "name": "Schedule Trigger5",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -848
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Liste PA (plateformes agreees e-invoicing) -> signal INFORMATIF.\n// Fingerprint des noms commerciaux (1re colonne) tries -> la webapp deduplique :\n// notif seulement quand la liste change (ajout / retrait / renommage).\nconst noms = [];\nfor (const item of $input.all()) {\n  const v = Object.values(item.json);\n  const nom = String(v[0] ?? '').trim();\n  if (nom && nom.toLowerCase() !== 'nom commercial') noms.push(nom);\n}\nnoms.sort((a, b) => a.localeCompare(b));\nlet h = 5381;\nconst s = noms.join('|');\nfor (let i = 0; i < s.length; i++) h = (((h << 5) + h) ^ s.charCodeAt(i)) >>> 0;\nreturn [{ json: {\n  sourceKey: 'impots_pdp',\n  paramKey: 'pdp.liste_audit',\n  tauxJsonPath: '',\n  valeurProposee: `${noms.length} plateformes (fp ${h})`,\n  dateEffet: null,\n  urlSource: 'https://www.impots.gouv.fr/je-consulte-la-liste-des-plateformes-agreees',\n  extrait: `PA en attente de rapport d'audit : ${noms.length} plateformes - ${noms.slice(0, 8).join(', ')}${noms.length > 8 ? '...' : ''}`,\n  confiance: 1.0,\n}}];\n"
+      },
+      "id": "38496c15-5da7-40cd-b4ff-76c13d529fb5",
+      "name": "Code - fingerprint",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -624
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "97ae3452-30cb-4d2a-af01-99375aa6debf",
+      "name": "Schedule Trigger2",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -624
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://www.impots.gouv.fr/sites/default/files/media/1_metier/2_professionnel/EV/2_gestion/290_facturation_electronique/listes_plateformes_agreees/liste_pa_attente_rapport_audit.xlsx",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "19ccb3b5-077a-43a1-9fb4-df006fd2ad18",
+      "name": "HTTP GET liste audit1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        -624
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "headerRow": true,
+          "sheetName": "Feuille1"
+        }
+      },
+      "id": "7c2a8792-85c2-49e6-8876-60e468cd3939",
+      "name": "Extract audit1",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        -624
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "680cdfd0-bcbb-4962-93dc-b20755a22391",
+      "name": "POST veille/signal5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        128,
+        -624
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://www.net-entreprises.fr/declaration/outils-de-controle-dsn-val/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "8463cdd5-568b-48ee-b0c7-fbbb83f5ab41",
+      "name": "HTTP GET DSN-VAL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        -400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = String($input.first().json.data || $input.first().json.body || '');\nconst m = html.match(/Version\\s+(\\d{4}\\.\\d+\\.\\d+\\.\\d+)/i);\nif (!m) return [];\nconst ver = m[1];\nconst dm = html.match(new RegExp(ver.replace(/\\./g, '\\\\.') + '[^0-9]{0,40}(\\\\d{1,2}\\\\s+[a-zA-Zéû]+\\\\s+\\\\d{4})'));\nreturn [{ json: {\n  sourceKey: 'dsn_val',\n  paramKey: 'dsn.val_version',\n  tauxJsonPath: '',\n  valeurProposee: ver,\n  dateEffet: null,\n  urlSource: 'https://www.net-entreprises.fr/declaration/outils-de-controle-dsn-val/',\n  extrait: `DSN-VAL version ${ver}` + (dm ? ` du ${dm[1]}` : ''),\n  confiance: 1.0,\n}}];"
+      },
+      "id": "0b0dc6c7-cb8e-465e-9b07-d501d2dcb9d8",
+      "name": "Code - version",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "5dfce5fd-e8cb-4eed-95bb-e733a56697ee",
+      "name": "Schedule Trigger8",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "5bdd3b0f-5dcd-4e4c-b941-ff4d30c7374a",
+      "name": "POST veille/signal6",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {
+          "delimiter": ";",
+          "encoding": "latin1",
+          "headerRow": true
+        }
+      },
+      "id": "b06e8759-171c-4b79-9e26-d34f0306c090",
+      "name": "Extract from File",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        128,
+        -1520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// BOSS Table des parametres -> signaux veille (valeurs structurees).\n// Lecture par POSITION (header Latin-1) : 0=Code 1=Libelle 2=Valeur 3=DateEffet 4=DateFin.\n// Match par CODE (ASCII stable). Gere espaces milliers (4 005) + virgule (38,21).\n// Regle : ne garder que la ligne EN COURS (date de fin vide ou //).\n// Exception RGDU ref SMIC : GELE au 1er janvier (decret 2026-509) -> ligne 01/01.\nconst MAP = {\n  // SMIC courant : PAS depuis BOSS (table datee = en retard des revalos en\n  // cours d'annee, ex juin) -> via INSEE BDM (S3, temps reel). BOSS ne sert\n  // ici que les parametres ANNUELS/GELES (fiables) + le SMIC ref RGDU (gele).\n  PSS_M_METROP: { paramKey: 'plafonds.pmss', tauxJsonPath: 'plafonds.pmss_2026', scale: 1 },\n  PSS_A_METROP: { paramKey: 'plafonds.pass', tauxJsonPath: 'plafonds.pass_annuel', scale: 1 },\n  COT_RGDU_Tmin_METROP: { paramKey: 'rgdu.tmin', tauxJsonPath: 'rgdu.t_min', scale: 0.01 },\n  COT_RGDU_Tdelta_49_METROP: { paramKey: 'rgdu.tdelta_moins', tauxJsonPath: 'rgdu.t_delta_50_moins', scale: 0.01 },\n  COT_RGDU_Tdelta_50_METROP: { paramKey: 'rgdu.tdelta', tauxJsonPath: 'rgdu.t_delta_50_plus', scale: 0.01 },\n  FNO_REST_INT:       { paramKey: 'frais.panier_repas', tauxJsonPath: 'plafonds_urssaf_indemnites.panier_seuil_J', scale: 1 },\n  COT_FNAL_50_METROP: { paramKey: 'cotisations.fnal_pat', tauxJsonPath: 'rubriques.3070.tauxPat', scale: 0.01 },\n};  \n\n\nconst num = (s) => Number(String(s ?? '').split('').filter((c) => '06 00 00 00 00,.-'.includes(c)).join('').replace(',', '.'));\nconst toIso = (d) => { const p = String(d || '').trim().split('/'); return (p.length === 3 && p[2].length === 4) ? p[2] + '-' + p[1] + '-' + p[0] : null; };\nconst isCurrent = (f) => !f || f === '//';\nconst year = new Date().getFullYear();\nconst jan1 = '01/01/' + year;\nconst rows = $input.all().map((it) => Object.values(it.json));\nconst out = [];\nfor (const v of rows) {\n  const conf = MAP[String(v[0] ?? '').trim()];\n  if (!conf) continue;\n  if (!isCurrent(String(v[4] ?? '').trim())) continue;\n  const brut = num(v[2]);\n  if (!Number.isFinite(brut)) continue;\n  const valeur = parseFloat((brut * conf.scale).toFixed(6));\n  out.push({ json: {\n    sourceKey: 'boss_table_parametres',\n    paramKey: conf.paramKey,\n    tauxJsonPath: conf.tauxJsonPath,\n    valeurProposee: String(valeur),\n    dateEffet: toIso(v[3]),\n    urlSource: 'https://boss.gouv.fr/portail/accueil/table-des-parametres.html',\n    extrait: String(v[1] ?? '').trim() + ' = ' + v[2] + ' (BOSS, effet ' + v[3] + ')',\n    confiance: 1.0,\n  } });\n}\n// RGDU ref SMIC = SMIC_H_METROP en vigueur au 01/01 (gele toute l'annee).\nconst ref = rows.find((v) => String(v[0]).trim() === 'SMIC_H_METROP' && String(v[3]).trim() === jan1);\nif (ref) {\n  const r = num(ref[2]);\n  if (Number.isFinite(r)) {\n    out.push({ json: {\n      sourceKey: 'boss_table_parametres',\n      paramKey: 'rgdu.smic',\n      tauxJsonPath: 'rgdu.smic_horaire',\n      valeurProposee: String(r),\n      dateEffet: year + '-01-01',\n      urlSource: 'https://boss.gouv.fr/portail/accueil/table-des-parametres.html',\n      extrait: 'SMIC de reference RGDU (gele au 01/01) = ' + ref[2],\n      confiance: 1.0,\n    } });\n  }\n}\n// Taux maladie & allocations familiales (bandeau RGDU) : plein + reduit.\n// La reduction partage le meme code BOSS (REDUC_COT_AF_SS_METROP) pour AF et\n// maladie -> on desambigue par le LIBELLE (col 1).\nconst curRow = (code) => rows.find((v) => String(v[0]).trim() === code && isCurrent(String(v[4] ?? '').trim()));\nconst reducRow = (needle) => rows.find((v) => String(v[0]).trim() === 'REDUC_COT_AF_SS_METROP' && isCurrent(String(v[4] ?? '').trim()) && String(v[1] ?? '').toLowerCase().includes(needle));\nconst emitRate = (paramKey, tauxJsonPath, pct, dateEffet, label) => {\n  if (!Number.isFinite(pct)) return;\n  out.push({ json: {\n    sourceKey: 'boss_table_parametres',\n    paramKey,\n    tauxJsonPath,\n    valeurProposee: String(parseFloat((pct / 100).toFixed(6))),\n    dateEffet,\n    urlSource: 'https://boss.gouv.fr/portail/accueil/table-des-parametres.html',\n    extrait: label + ' = ' + pct + ' % (BOSS)',\n    confiance: 1.0,\n  } });\n};\nconst afR = curRow('COT_AF_SS_METROP');\nconst amR = curRow('COT_AM_SS_METROP');\nconst afFull = afR ? num(afR[2]) : NaN;\nconst amFull = amR ? num(amR[2]) : NaN;\nconst afReducR = reducRow('famil');\nconst amReducR = reducRow('maladie');\nconst afReduc = afReducR ? num(afReducR[2]) : NaN;\nconst amReduc = amReducR ? num(amReducR[2]) : NaN;\nconst afDate = afR ? toIso(afR[3]) : null;\nconst amDate = amR ? toIso(amR[3]) : null;\nemitRate('cotisations.famille_pat_normal', 'seuils_cotisations.famille_pat_normal', afFull, afDate, 'Allocations familiales (taux plein)');\nemitRate('cotisations.maladie_pat_normal', 'seuils_cotisations.maladie_pat_normal', amFull, amDate, 'Maladie patronale (taux plein)');\nif (Number.isFinite(afFull) && Number.isFinite(afReduc)) emitRate('cotisations.famille_pat_reduit', 'seuils_cotisations.famille_pat_reduit', afFull - afReduc, afDate, 'Allocations familiales (taux reduit)');\nif (Number.isFinite(amFull) && Number.isFinite(amReduc)) emitRate('cotisations.maladie_pat_reduit', 'seuils_cotisations.maladie_pat_reduit', amFull - amReduc, amDate, 'Maladie patronale (taux reduit)');\nreturn out;"
+      },
+      "id": "7a059ee2-77bd-4757-8e31-634bfbcde807",
+      "name": "Code - parser parametres BOSS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        -1520
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "a2e6170e-3d89-4d97-a3dd-8fbaafaa87b5",
+      "name": "Schedule Trigger4",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -1520
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://boss.gouv.fr/portail/accueil/table-des-parametres.html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "8fa79354-cabc-4bcd-ad88-2f906952635c",
+      "name": "HTTP GET page BOSS1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        -1520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Scrape l'URL du CSV \"Table des parametres\" depuis la page BOSS.\n// Le chemin est date (202601_...) et change a chaque MAJ -> on l'extrait au\n// lieu de le coder en dur (plus jamais de 404 sur le chemin date).\nconst html = String($input.first().json.data || $input.first().json.body || '');\nconst m = html.match(/href=\"([^\"]*Table des param[^\"]*\\.csv)\"/i);\nif (!m) throw new Error('Lien CSV BOSS introuvable sur la page table-des-parametres.');\nconst raw = m[1].startsWith('http') ? m[1] : 'https://boss.gouv.fr' + m[1];\nreturn [{ json: { csvUrl: encodeURI(raw) } }];"
+      },
+      "id": "9921e899-43c0-417f-9280-41273a827286",
+      "name": "Code - extraire URL CSV1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -1520
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.csvUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/csv,application/octet-stream,*/*"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "62985b77-78e3-43d1-8dcc-cfce04b793fe",
+      "name": "HTTP GET CSV1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -1520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "ef2188e1-96e1-4d7f-82bd-1126ff27374b",
+      "name": "POST veille/signal3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        576,
+        -1520
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 6 3 * *"
+            }
+          ]
+        }
+      },
+      "id": "95cc4436-6977-49d5-87b1-e6e862c503e1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/dsn/norme/diagnostic",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "9c074916-6195-487b-ae1e-885a8ec60080",
+      "name": "POST norme/diagnostic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -176
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 5 1,4,7,10 *"
+            }
+          ]
+        }
+      },
+      "id": "9ea98f3f-aa46-447e-8f48-fcff9a1ef41b",
+      "name": "Schedule Trigger S4",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.urssaf.fr/accueil/outils-documentation/taux-baremes/taux-cotisations-secteur-prive.html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,*/*"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "37a70a19-be56-408d-b237-39ce806bf0ba",
+      "name": "HTTP GET URSSAF taux",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -544,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parser URSSAF taux — v2 durcie (décode entités + split caption + <tr> tolérant + auto-diagnostic).\nfunction decode(s) {\n  return s\n    .replace(/&nbsp;/g, ' ').replace(/&#39;|&apos;/g, \"'\")\n    .replace(/&eacute;/g, 'é').replace(/&egrave;/g, 'è').replace(/&ecirc;/g, 'ê').replace(/&euml;/g, 'ë')\n    .replace(/&agrave;/g, 'à').replace(/&acirc;/g, 'â')\n    .replace(/&ocirc;/g, 'ô').replace(/&ouml;/g, 'ö')\n    .replace(/&ugrave;/g, 'ù').replace(/&ucirc;/g, 'û')\n    .replace(/&icirc;/g, 'î').replace(/&iuml;/g, 'ï').replace(/&ccedil;/g, 'ç')\n    .replace(/&Eacute;/g, 'É').replace(/&Egrave;/g, 'È').replace(/&amp;/g, '&');\n}\nfunction parseUrssafTaux(rawHtml) {\n  const html = decode(rawHtml);\n  const stripTags = (s) => s.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  const toFrac = (p) => { const n = Number(String(p).replace('%', '').replace(',', '.').trim()); return Number.isFinite(n) ? n / 100 : NaN; };\n  const idx = (re) => { const m = html.match(re); return m ? m.index : -1; };\n  let iEmp = idx(/patronaux applicables/i); if (iEmp < 0) iEmp = html.indexOf('Taux de cotisations employeur');\n  let iSal = idx(/salariaux applicables/i); if (iSal < 0) iSal = html.indexOf('Taux de cotisations salari');\n  let empSection, salSection;\n  if (iEmp >= 0 && iSal >= 0) {\n    if (iEmp < iSal) { empSection = html.slice(iEmp, iSal); salSection = html.slice(iSal); }\n    else { salSection = html.slice(iSal, iEmp); empSection = html.slice(iEmp); }\n  } else { empSection = iEmp >= 0 ? html.slice(iEmp) : ''; salSection = iSal >= 0 ? html.slice(iSal) : ''; }\n  const rowsOf = (section) => {\n    const rows = [];\n    for (const m of section.matchAll(/<tr\\b[^>]*table_custom__tbody[^>]*>([\\s\\S]*?)<\\/tr>/gi)) {\n      const tr = m[1];\n      const th = tr.match(/<th\\b[^>]*>([\\s\\S]*?)<\\/th>/i);\n      const td = tr.match(/<td\\b[^>]*>([\\s\\S]*?)<\\/td>/i);\n      if (th && td) rows.push({ libelle: stripTags(th[1]), valeur: stripTags(td[1]) });\n    }\n    return rows;\n  };\n  const emp = rowsOf(empSection), sal = rowsOf(salSection);\n  const trTotal = (html.match(/table_custom__tbody/g) || []).length;\n  if (emp.length === 0 && sal.length === 0) {\n    throw new Error('PARSE VIDE — table_custom__tbody x' + trTotal + ' | iEmp=' + iEmp + ' iSal=' + iSal + ' | len=' + html.length + '. Si x0 -> tables absentes du HTML brut (rendu JS) ; sinon -> markup <tr> different (copie-moi un <tr>).');\n  }\n  const find = (rows, re, notRe) => rows.find((r) => re.test(r.libelle) && (!notRe || !notRe.test(r.libelle)));\n  const cap = (t, re) => (t && t.match(re) ? t.match(re)[1] : null);\n  const out = [];\n  const push = (paramKey, tauxJsonPath, valStr) => { if (valStr == null) return; const f = toFrac(valStr); if (!Number.isFinite(f) || f <= 0 || f > 0.5) return; out.push({ paramKey, tauxJsonPath, valeurProposee: f.toFixed(5) }); };\n  const vieEmp = find(emp, /assurance vieillesse/i);\n  if (vieEmp) {\n    push('cotisations.vieillesse_deplaf_pat', 'rubriques.3010d.tauxPat', cap(vieEmp.valeur, /([\\d.,]+)\\s*%\\s*sur la totalit/i));\n    push('cotisations.vieillesse_plaf_pat', 'rubriques.3010.tauxPat', cap(vieEmp.valeur, /et\\s*([\\d.,]+)\\s*%\\s*dans la limite/i));\n  }\n  const chom = find(emp, /assurance ch[oô]mage/i);\n  if (chom) push('cotisations.chomage_pat', 'rubriques.3100.tauxPat', cap(chom.valeur, /([\\d.,]+)\\s*%/));\n  const appr = find(emp, /taxe d'apprentissage/i, /haut-rhin|moselle|bas-rhin|formation profession/i);\n  if (appr) {\n    push('cotisations.apprentissage_principale', 'rubriques.3930.tauxPat', cap(appr.valeur, /principale[^%\\d]*([\\d.,]+)\\s*%/i));\n    push('cotisations.apprentissage_solde', 'rubriques.3931.tauxPat', cap(appr.valeur, /solde[^%\\d]*([\\d.,]+)\\s*%/i));\n  }\n  const form = find(emp, /contribution formation profession/i);\n  if (form) push('cotisations.formation_legale', 'rubriques.3920.tauxPat', cap(form.valeur, /11\\s*salari[eé]s et plus[\\s:]*([\\d.,]+)\\s*%/i));\n  const vieSal = find(sal, /assurance vieillesse/i);\n  if (vieSal) {\n    push('cotisations.vieillesse_deplaf_sal', 'rubriques.3010d.tauxSal', cap(vieSal.valeur, /([\\d.,]+)\\s*%\\s*sur la totalit/i));\n    push('cotisations.vieillesse_plaf_sal', 'rubriques.3010.tauxSal', cap(vieSal.valeur, /et\\s*([\\d.,]+)\\s*%\\s*dans la limite/i));\n  }\n  const csgImp = find(sal, /csg imposable/i);\n  if (csgImp) push('cotisations.csg_non_deductible', 'rubriques.5100.tauxSal', cap(csgImp.valeur, /([\\d.,]+)\\s*%/));\n  const csgNon = find(sal, /csg non imposable/i);\n  if (csgNon) push('cotisations.csg_deductible', 'rubriques.4100.tauxSal', cap(csgNon.valeur, /([\\d.,]+)\\s*%/));\n  const crds = find(sal, /crds/i);\n  if (crds) push('cotisations.crds', 'rubriques.5101.tauxSal', cap(crds.valeur, /([\\d.,]+)\\s*%/));\n  return out;\n}\nconst html = String($input.first().json.data ?? $input.first().json.body ?? '');\nreturn parseUrssafTaux(html).map((r) => ({ json: {\n  sourceKey: 'urssaf_taux_secteur_prive', paramKey: r.paramKey, tauxJsonPath: r.tauxJsonPath,\n  valeurProposee: r.valeurProposee, dateEffet: '2026-01-01',\n  urlSource: 'https://www.urssaf.fr/accueil/outils-documentation/taux-baremes/taux-cotisations-secteur-prive.html',\n  extrait: r.paramKey + ' = ' + r.valeurProposee + ' (fraction, source URSSAF)', confiance: 0.9,\n} }));\n"
+      },
+      "id": "c66d6b2a-82c9-4568-81f0-46b0d5e47f3a",
+      "name": "Code - parser taux URSSAF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.acme.fr/api/veille/signal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "9853fec5-9ef5-4275-9690-f17b01467d25",
+      "name": "POST veille/signal4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        48
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpHeaderAuth (a reconnecter)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "HTTP Request GET URSSAF": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "POST veille signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request GET URSSAF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request GET BDM": {
+      "main": [
+        [
+          {
+            "node": "XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request GET BDM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "POST veille/signal1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XML": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET BOFiP PAS": {
+      "main": [
+        [
+          {
+            "node": "Code - version bareme",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - version bareme": {
+      "main": [
+        [
+          {
+            "node": "POST veille/signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger5": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET BOFiP PAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - fingerprint": {
+      "main": [
+        [
+          {
+            "node": "POST veille/signal5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger2": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET liste audit1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET liste audit1": {
+      "main": [
+        [
+          {
+            "node": "Extract audit1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract audit1": {
+      "main": [
+        [
+          {
+            "node": "Code - fingerprint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET DSN-VAL": {
+      "main": [
+        [
+          {
+            "node": "Code - version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - version": {
+      "main": [
+        [
+          {
+            "node": "POST veille/signal6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger8": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET DSN-VAL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code - parser parametres BOSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - parser parametres BOSS": {
+      "main": [
+        [
+          {
+            "node": "POST veille/signal3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger4": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET page BOSS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET page BOSS1": {
+      "main": [
+        [
+          {
+            "node": "Code - extraire URL CSV1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - extraire URL CSV1": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET CSV1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET CSV1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger S4": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET URSSAF taux",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET URSSAF taux": {
+      "main": [
+        [
+          {
+            "node": "Code - parser taux URSSAF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - parser taux URSSAF": {
+      "main": [
+        [
+          {
+            "node": "POST veille/signal4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "POST norme/diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "tags": []
+}

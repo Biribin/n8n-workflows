@@ -1,0 +1,889 @@
+{
+  "name": "Veille forum n8n — offres & mentions",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Branche offres\n\nLit la categorie Jobs du forum, garde les sujets actifs des 21 derniers jours (12 max par execution, le reste passe a l execution suivante), ecarte ceux deja vus via la data table `forum_n8n_sujets_vus`, fait scorer le reste par Claude, journalise TOUS les sujets analyses, puis n envoie un mail que pour les pertinents (score >= 6).\n\nAucun secret dans ce workflow : la deduplication passe par la data table n8n, pas par un PAT GitHub.\n\nSi 0 sujet nouveau ou 0 pertinent, la chaine s arrete d elle-meme : pas de mail vide.",
+        "height": 340,
+        "width": 2280,
+        "color": 4
+      },
+      "id": "68b5f3b8-a12a-4b8d-b4c9-38408af2fcc3",
+      "name": "Sticky Note 5eb4f473",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Branche mentions — « est-ce qu on me cherche ? »\n\nCherche `Biribin` et `lineobiribin` dans tout le forum, pas seulement la categorie Jobs.\n\n« Lineo » seul est volontairement ecarte : verifie le 2026-08-05, ce terme remonte 2 faux positifs (sujets XML de 2020) sans aucun lien avec le candidat.\n\nChaque post trouve est journalise sous la cle `mention-<id>` dans la meme data table : jamais deux alertes pour le meme message.",
+        "height": 340,
+        "width": 1360,
+        "color": 5
+      },
+      "id": "3b9a51b4-51f2-4f29-b577-4372e4aa418f",
+      "name": "Sticky Note fc4641ba",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 7,12,18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "527005fe-161d-4ef1-9cd5-f0d8668a2e57",
+      "name": "Trois fois par jour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://community.n8n.io/c/jobs/13.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; veille-emploi-lineo/1.0)"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0adfe49-6662-4f28-9bcb-099828cf30b1",
+      "name": "Forum: categorie Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json || {};\nconst topics = (res.topic_list && res.topic_list.topics) || [];\nconst maintenant = Date.now();\nconst out = [];\nfor (const t of topics) {\n  const titre = String(t.title || \"\");\n  if (t.pinned === true) continue;\n  if (/^About the/i.test(titre)) continue;\n  const ref = Date.parse(t.last_posted_at || t.created_at || \"\") || 0;\n  const jours = (maintenant - ref) / 86400000;\n  if (jours > 21) continue;\n  out.push({ json: {\n    topic_id: String(t.id),\n    titre: titre,\n    url: \"https://community.n8n.io/t/\" + (t.slug || \"sujet\") + \"/\" + t.id,\n    cree_le: String(t.created_at || \"\").slice(0, 10),\n    reponses: t.posts_count || 0\n  } });\n}\n// Plafond volontaire : le reste sera pris a l execution suivante, pas perdu.\nreturn out.slice(0, 12);"
+      },
+      "id": "7a0a3da6-8e8a-4709-b6cd-6e31f07a6327",
+      "name": "Extraire les sujets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "dEjcvGeGvCCwq3DP",
+          "cachedResultName": "forum_n8n_sujets_vus"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "topic_id",
+              "keyValue": "={{ $json.topic_id }}"
+            }
+          ]
+        }
+      },
+      "id": "38ce5301-2b54-4867-8572-23eb1cc6ac1f",
+      "name": "Sujets jamais vus",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://community.n8n.io/t/{{ $json.topic_id }}.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; veille-emploi-lineo/1.0)"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9143007a-becb-4226-ad03-f782abca2894",
+      "name": "Forum: detail du sujet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const NL = String.fromCharCode(10);\nconst GUILLEMET = String.fromCharCode(34);\nconst profil = \"Profil du candidat : decrivez ici le poste vise, les competences, la mobilite, les langues et les criteres eliminatoires. Plus ce paragraphe est precis, moins le scoring se trompe.\";\n  const consigne = \"Tu évalues si un message du forum n8n (catégorie Jobs) est une opportunité pertinente pour ce candidat. \"\n  + \"Réponds UNIQUEMENT par un objet JSON, sans texte autour et sans bloc de code, au format exact : \"\n  + '{\"pertinent\": true, \"score\": 7, \"type_poste\": \"n8n developer\", \"remote\": \"full remote\", \"langue\": \"anglais\", \"budget\": \"non précisé\", \"pourquoi\": \"une phrase\", \"signaux_negatifs\": \"une phrase ou vide\"} '\n  + \"score = entier de 0 à 10. 0 = hors sujet, 10 = correspondance parfaite. \"\n  + \"Mets pertinent = false et un score bas si le message est une CANDIDATURE (quelqu'un qui cherche du travail) et non une OFFRE de mission ou d'emploi. \"\n  + \"Rédige pourquoi et signaux_negatifs en français.\";\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json || {};\n  const posts = (d.post_stream && d.post_stream.posts) || [];\n  const premier = posts[0] || {};\n  let corps = String(premier.cooked || \"\");\n  corps = corps.split(\"<br>\").join(NL).split(\"<br/>\").join(NL).split(\"<br />\").join(NL);\n  corps = corps.split(\"</p>\").join(NL).split(\"</li>\").join(NL);\n  corps = corps.replace(/<[^>]+>/g, \"\");\n  corps = corps.split(\"&nbsp;\").join(\" \").split(\"&amp;\").join(\"&\").split(\"&lt;\").join(\"<\").split(\"&gt;\").join(\">\");\n  corps = corps.split(\"&#39;\").join(\"'\").split(\"&quot;\").join(GUILLEMET);\n  const bouts = [];\n  for (const ligne of corps.split(NL)) {\n    const propre = ligne.trim();\n    if (propre.length > 0) { bouts.push(propre); }\n  }\n  corps = bouts.join(NL).slice(0, 4000);\n  const titre = String(d.title || \"\");\n  const payload = {\n    model: \"claude-sonnet-5\",\n    max_tokens: 700,\n    system: profil + \" \" + consigne,\n    messages: [{ role: \"user\", content: \"TITRE : \" + titre + NL + \"AUTEUR : \" + (premier.username || \"?\") + NL + \"DATE : \" + String(d.created_at || \"\").slice(0, 10) + NL + NL + \"MESSAGE :\" + NL + corps }]\n  };\n  out.push({ json: {\n    topic_id: String(d.id),\n    titre: titre,\n    url: \"https://community.n8n.io/t/\" + (d.slug || \"sujet\") + \"/\" + d.id,\n    auteur: String(premier.username || \"\"),\n    cree_le: String(d.created_at || \"\").slice(0, 10),\n    claudeBody: JSON.stringify(payload)\n  } });\n}\nreturn out;"
+      },
+      "id": "1400a76e-cedd-4bb1-9035-82f0217a7b93",
+      "name": "Preparer appel Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "n8n.exemple.internal/api/forum-judge",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.claudeBody }}",
+        "options": {}
+      },
+      "id": "218ea178-ee41-45e3-ae3d-4424a898f622",
+      "name": "Claude: pertinence de l offre",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "A_RECONNECTER",
+          "name": "anthropicApi (a reconnecter)"
+        },
+        "httpBasicAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpBasicAuth (a reconnecter)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $(\"Preparer appel Claude\").all();\nconst reponses = $input.all();\nconst out = [];\nfor (let i = 0; i < reponses.length; i++) {\n  const meta = (prep[i] && prep[i].json) || {};\n  let txt = \"\";\n  const blocs = (reponses[i].json && reponses[i].json.content) || [];\n  if (Array.isArray(blocs)) {\n    for (const b of blocs) { if (b && b.type === \"text\") { txt += String(b.text || \"\"); } }\n  }\n  let v = {};\n  try {\n    v = JSON.parse(txt);\n  } catch (e) {\n    const a = txt.indexOf(\"{\");\n    const z = txt.lastIndexOf(\"}\");\n    if (a >= 0 && z > a) {\n      try { v = JSON.parse(txt.slice(a, z + 1)); } catch (e2) { v = {}; }\n    }\n  }\n  const n = Number(v.score);\n  const score = Number.isFinite(n) ? n : 0;\n  out.push({ json: {\n    topic_id: meta.topic_id,\n    titre: meta.titre,\n    url: meta.url,\n    auteur: meta.auteur,\n    cree_le: meta.cree_le,\n    score: score,\n    pertinent: v.pertinent === true && score >= 6,\n    type_poste: String(v.type_poste || \"\"),\n    remote: String(v.remote || \"\"),\n    langue: String(v.langue || \"\"),\n    budget: String(v.budget || \"\"),\n    pourquoi: String(v.pourquoi || \"\"),\n    signaux_negatifs: String(v.signaux_negatifs || \"\"),\n    analyse_ok: txt.length > 0,\n    date_vue: new Date().toISOString().slice(0, 10)\n  } });\n}\nreturn out;"
+      },
+      "id": "a923c066-fcae-4341-8684-2d2873a165ad",
+      "name": "Lire le verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "dEjcvGeGvCCwq3DP",
+          "cachedResultName": "forum_n8n_sujets_vus"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "topic_id": "={{ $json.topic_id }}",
+            "titre": "={{ $json.titre }}",
+            "url": "={{ $json.url }}",
+            "score": "={{ $json.score }}",
+            "pertinent": "={{ $json.pertinent }}",
+            "date_vue": "={{ $json.date_vue }}"
+          },
+          "schema": [
+            {
+              "id": "topic_id",
+              "displayName": "topic_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titre",
+              "displayName": "titre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pertinent",
+              "displayName": "pertinent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_vue",
+              "displayName": "date_vue",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "13aa2762-bdb0-4525-b775-b70d359f47e1",
+      "name": "📝 Marquer vu (non pertinent)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2016,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Termes distinctifs seulement. \"Lineo\" seul est ecarte : verifie le 2026-08-05,\n// il remonte 2 faux positifs (sujets XML de 2020) sans lien avec le candidat.\nreturn [{ json: { q: \"Biribin\" } }, { json: { q: \"lineobiribin\" } }];"
+      },
+      "id": "1dfc0883-4050-4668-82ff-2567d45d3944",
+      "name": "Requetes de mention",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://community.n8n.io/search.json?q={{ $json.q }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; veille-emploi-lineo/1.0)"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "512852ab-3da0-4b60-b0d1-46632baaeb1f",
+      "name": "Forum: me cherche-t-on ?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        384
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nconst deja = {};\nfor (const item of $input.all()) {\n  const d = item.json || {};\n  const posts = Array.isArray(d.posts) ? d.posts : [];\n  const sujets = Array.isArray(d.topics) ? d.topics : [];\n  const titres = {};\n  for (const t of sujets) { titres[t.id] = t.title; }\n  for (const p of posts) {\n    const cle = \"mention-\" + p.id;\n    if (deja[cle]) { continue; }\n    deja[cle] = true;\n    out.push({ json: {\n      topic_id: cle,\n      titre: \"Mention : \" + (titres[p.topic_id] || (\"sujet \" + p.topic_id)),\n      url: \"https://community.n8n.io/t/\" + p.topic_id + \"/\" + (p.post_number || 1),\n      auteur: String(p.username || \"\"),\n      extrait: String(p.blurb || \"\").slice(0, 500),\n      cree_le: String(p.created_at || \"\").slice(0, 10),\n      score: 10,\n      pertinent: true,\n      date_vue: new Date().toISOString().slice(0, 10)\n    } });\n  }\n}\nreturn out;"
+      },
+      "id": "41a73468-daec-4542-9198-0de280e45fb3",
+      "name": "Extraire les mentions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "dEjcvGeGvCCwq3DP",
+          "cachedResultName": "forum_n8n_sujets_vus"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "topic_id",
+              "keyValue": "={{ $json.topic_id }}"
+            }
+          ]
+        }
+      },
+      "id": "04e2abf7-c5a1-46d5-a9ae-850eb813b3e4",
+      "name": "Mentions jamais vues",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://service.interne:3000/api/inbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ url: $json.url, company: $json.auteur, role: ($json.pourquoi ? '[' + $json.score + '/10] ' + $json.titre : $json.titre), posted: $json.cree_le, note: ($json.score + '/10 · ' + ($json.pourquoi || $json.extrait || '')) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "09e03447-6645-4de7-9da1-373e3deffcef",
+      "name": "Pousser vers career-ops",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2016,
+        192
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "A_RECONNECTER",
+          "name": "httpBasicAuth (a reconnecter)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "24ec6d9f-7202-4234-9427-8d7d59362277",
+      "name": "🔀 Pertinent ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        192
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "est-pertinent",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.pertinent }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "notes": "Remplace le filtre « Garder les pertinents ». Un filtre n'a qu'une sortie, donc le marquage « vu » devait vivre en parallele de la poussee : le sujet etait marque vu meme quand la poussee echouait. Avec deux sorties, chaque cas a son propre chemin."
+    },
+    {
+      "id": "fcbe86fa-69b8-42e0-bbbf-5b619b4cb083",
+      "name": "✅ Marquer vu APRES la poussee",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        192
+      ],
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "dEjcvGeGvCCwq3DP",
+          "cachedResultName": "forum_n8n_sujets_vus"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "topic_id": "={{ $json.topic_id }}",
+            "titre": "={{ $json.titre }}",
+            "url": "={{ $json.url }}",
+            "score": "={{ $json.score }}",
+            "pertinent": "={{ $json.pertinent }}",
+            "date_vue": "={{ $json.date_vue }}"
+          },
+          "schema": [
+            {
+              "id": "topic_id",
+              "displayName": "topic_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titre",
+              "displayName": "titre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pertinent",
+              "displayName": "pertinent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_vue",
+              "displayName": "date_vue",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "LE correctif. Un sujet n'est marque vu qu'une fois REELLEMENT arrive dans career-ops. Si la poussee echoue, la ligne n'est pas ecrite, « Sujets jamais vus » le represente a la tournee suivante, et il est repousse. Le prix est un nouvel appel a Claude ; le prix de l'ancien comportement etait une offre perdue pour toujours."
+    },
+    {
+      "id": "5ec3d577-3f54-466d-889f-448ab220237b",
+      "name": "🧩 Rattacher le sujet pousse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        192
+      ],
+      "parameters": {
+        "jsCode": "// Sans ce rattachement, le marquage ecrivait une ligne VIDE (constate le\n// 2026-08-07, ligne 24 de la data table) : la cle de deduplication etait nulle,\n// donc le sujet aurait ete reanalyse et repousse a chaque tournee, sans fin.\nconst sujets = $('🔀 Pertinent ?').all();\nconst reponses = $input.all();\nconst out = [];\nfor (let i = 0; i < reponses.length; i++) {\n  const s = (sujets[i] && sujets[i].json) || {};\n  // Jamais de ligne sans cle : mieux vaut reanalyser le sujet demain que\n  // polluer la table avec une entree qui ne dedupliquera jamais rien.\n  if (!s.topic_id) continue;\n  out.push({ json: { ...s, inbox_added: reponses[i].json && reponses[i].json.added, inbox_already: reponses[i].json && reponses[i].json.already } });\n}\nreturn out;"
+      },
+      "notes": "La reponse de /api/inbox ne porte pas le sujet, seulement { added, already, urls }. On le rattache par INDEX, exactement comme « Lire le verdict » le fait avec « Preparer appel Claude » : le chainage d'items ne se remonte pas a travers un noeud HTTP."
+    },
+    {
+      "id": "959e68a1-1d2d-4758-b6b3-58626d77254b",
+      "name": "Pousser la mention vers career-ops",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        384
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://service.interne:3000/api/inbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ url: $json.url, company: $json.auteur, role: $json.titre, posted: $json.cree_le, note: ($json.score + '/10 · ' + ($json.extrait || '')) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "notes": "Noeud distinct de celui des offres, volontairement : chaque chaine reste lineaire, donc le rattachement par index ne peut pas melanger un sujet et une mention.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "6db0d608-590b-4e82-bfcb-61021019647f",
+      "name": "🧩 Rattacher la mention poussee",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        384
+      ],
+      "parameters": {
+        "jsCode": "const mentions = $('Mentions jamais vues').all();\nconst reponses = $input.all();\nconst out = [];\nfor (let i = 0; i < reponses.length; i++) {\n  const m = (mentions[i] && mentions[i].json) || {};\n  if (!m.topic_id) continue;\n  out.push({ json: m });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "f75ea1d7-8269-4c4e-a548-1f5739ba9f74",
+      "name": "📌 Marquer la mention vue APRES la poussee",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        384
+      ],
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "dEjcvGeGvCCwq3DP",
+          "cachedResultName": "forum_n8n_sujets_vus"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "topic_id": "={{ $json.topic_id }}",
+            "titre": "={{ $json.titre }}",
+            "url": "={{ $json.url }}",
+            "score": "={{ $json.score }}",
+            "pertinent": "={{ $json.pertinent }}",
+            "date_vue": "={{ $json.date_vue }}"
+          },
+          "schema": [
+            {
+              "id": "topic_id",
+              "displayName": "topic_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titre",
+              "displayName": "titre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pertinent",
+              "displayName": "pertinent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_vue",
+              "displayName": "date_vue",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Trois fois par jour": {
+      "main": [
+        [
+          {
+            "node": "Forum: categorie Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Requetes de mention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forum: categorie Jobs": {
+      "main": [
+        [
+          {
+            "node": "Extraire les sujets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire les sujets": {
+      "main": [
+        [
+          {
+            "node": "Sujets jamais vus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sujets jamais vus": {
+      "main": [
+        [
+          {
+            "node": "Forum: detail du sujet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forum: detail du sujet": {
+      "main": [
+        [
+          {
+            "node": "Preparer appel Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer appel Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude: pertinence de l offre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: pertinence de l offre": {
+      "main": [
+        [
+          {
+            "node": "Lire le verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requetes de mention": {
+      "main": [
+        [
+          {
+            "node": "Forum: me cherche-t-on ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forum: me cherche-t-on ?": {
+      "main": [
+        [
+          {
+            "node": "Extraire les mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire les mentions": {
+      "main": [
+        [
+          {
+            "node": "Mentions jamais vues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire le verdict": {
+      "main": [
+        [
+          {
+            "node": "🔀 Pertinent ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Pertinent ?": {
+      "main": [
+        [
+          {
+            "node": "Pousser vers career-ops",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📝 Marquer vu (non pertinent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pousser vers career-ops": {
+      "main": [
+        [
+          {
+            "node": "🧩 Rattacher le sujet pousse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Rattacher le sujet pousse": {
+      "main": [
+        [
+          {
+            "node": "✅ Marquer vu APRES la poussee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mentions jamais vues": {
+      "main": [
+        [
+          {
+            "node": "Pousser la mention vers career-ops",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pousser la mention vers career-ops": {
+      "main": [
+        [
+          {
+            "node": "🧩 Rattacher la mention poussee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Rattacher la mention poussee": {
+      "main": [
+        [
+          {
+            "node": "📌 Marquer la mention vue APRES la poussee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

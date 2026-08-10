@@ -1,0 +1,131 @@
+{
+  "name": "Graph Item Resolver — emailId → webLink",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "graph-resolve-item",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b4bd2e02-16f5-4af5-828d-7ce0897cda51",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        16
+      ],
+      "webhookId": "A_REGENERER"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "34f1c643-6f42-4593-adc7-87faa740c9fc",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.body.emailId }}"
+        },
+        "output": "fields",
+        "fields": [
+          "subject",
+          "from",
+          "bodyPreview",
+          "body",
+          "receivedDateTime",
+          "webLink"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        144,
+        128
+      ],
+      "id": "1481f7e2-865c-4a77-ba5b-f5b12b610a88",
+      "name": "Get a message",
+      "webhookId": "A_REGENERER",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "A_RECONNECTER",
+          "name": "microsoftOutlookOAuth2Api (a reconnecter)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nif (!item?.json?.subject) return [{ json: { found: false } }];\nreturn [{ json: {\n  found: true,\n  subject: item.json.subject ?? null,\n  from: item.json.from?.emailAddress?.address ?? null,\n  fromName: item.json.from?.emailAddress?.name ?? null,\n  receivedDateTime: item.json.receivedDateTime ?? null,\n  bodyPreview: item.json.bodyPreview ?? null,\n  body: item.json.body?.content ?? null,\n  bodyType: item.json.body?.contentType ?? 'text',\n  webLink: item.json.webLink ?? null\n} }];"
+      },
+      "id": "c36f6e3e-7326-40ca-b060-5ad91fc56852",
+      "name": "Extract webLink",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message": {
+      "main": [
+        [
+          {
+            "node": "Extract webLink",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract webLink": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "LDyoFgcAY8zHPxDo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}
